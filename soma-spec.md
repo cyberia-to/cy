@@ -28,14 +28,14 @@ Four concepts form the architecture's identity layer. Every multi-agent architec
 
 | concept | nature | lifecycle |
 |---|---|---|
-| Body | physical vessel; semcon with properties | mortal; replaceable |
+| Body | physical vessel; dialect with properties | mortal; replaceable |
 | Neuron | cognitive agent; has Addresses | task-scoped or persistent |
 | Soul | root Neuron; holds balance; orchestrates | immortal; part of Avatar |
 | Avatar | Name + Soul + Body | immortal (Name + Soul persist; Body replaced) |
 
 ## Body — the physical vessel
 
-A semcon with physical properties. One Body = one physical machine. Non-fungible, non-transferable. A laptop is one Body. A phone is another. A server is another.
+A dialect with physical properties. One Body = one physical machine. Non-fungible, non-transferable. A laptop is one Body. A phone is another. A server is another.
 
 Body is mortal and replaceable. When a Body fails, the Avatar that inhabited it finds a new Body and continues.
 
@@ -427,6 +427,30 @@ Canonical loop patterns the architecture inherits, each as a Skill<Composite> pa
 | Tru compilation | compilation | block tick → recompute φ*, emit .model |
 
 soma's four loops compose four of these patterns (active inference + allostasis + DMN/TPN + market) running in parallel within one Body's budget.
+
+## Helical temporal geometry
+
+the four loops do not run at the same timescale. they form a temporal helix: nested oscillators, each encoding a different scale of information.
+
+```
+ms    — tier-0 routing + embedding          (one inference step)
+100ms — perception-action turn              (loop 1: predict → compare → act)
+1s    — attention salience evaluation       (loop 3: DMN/TPN switch)
+10s   — homeostasis forecast                (loop 2: resource trajectory)
+min   — market scan                         (loop 4: opportunity scan)
+hour  — episodic consolidation              (tri-kernel partial recompute)
+block — φ* update                           (tru compilation loop)
+lunar — structural crystallization          (weight freeze, new moon)
+```
+
+each timescale is a separate oscillator. together they form a time crystal stack — information encoded in temporal phase rather than spatial configuration. this makes it robust: block-level noise (individual cyberlinks) washes out before reaching the lunar crystallization layer.
+
+the helix property: the four loops are not independent clocks. they are coupled through the neuromodulatory parameters (λ_d, λ_s, λ_h, T). when the attention controller (loop 3) switches to DMN mode, it reduces λ_d (less exploration) and increases λ_h (trust long-term model). this change of pitch in one oscillator propagates to the others — the same mechanism as [[topoisomerase]] maintaining the linking number across replication.
+
+the temporal helix gives soma a cognitive geometry:
+- winding forward (task execution) = increasing topological charge in the graph (new cyberlinks)
+- unwinding (consolidation) = reading the winding number (tri-kernel recomputing φ*)
+- crystallization (new moon) = locking the current winding number into the weight structure
 
 ## Tru's compilation loop — the meta-loop
 
