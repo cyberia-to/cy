@@ -11,7 +11,7 @@ Each soma instance runs on one Body (physical machine), manages its own resource
 ## Core concepts
 
 - **Avatar** = Name (NFT) + Soul (root Neuron) + Body (current machine)
-- **Body** = mortal physical vessel; semcon with resource budget
+- **Body** = mortal physical vessel; dialect with resource budget
 - **Soul** = root Neuron; holds sigma; orchestrates worker Neurons; immortal
 - **Neuron** = cognitive worker; has many Addresses; executes Tasks; holds Skills
 - **Sigma** = sum of token balances across all networks; migrates with Soul

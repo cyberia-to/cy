@@ -35,7 +35,7 @@ Cyb takes: the SQLite-as-filesystem model for agent workspaces (snapshot = `cp d
 ### Rust agent frameworks
 
 #### [rig](https://github.com/0xPlaygrounds/rig)
-Pure Rust, Tokio · 20+ LLM providers + 10+ vector stores under unified traits, GenAI Semantic Convention compatible, full WASM build.
+Pure Rust, Tokio · 20+ LLM providers + 10+ vector stores under unified traits, GenAI Dialect compatible, full WASM build.
 Cyb takes: `rig-core` as cyb's LLM provider layer — this is the closest thing to "the React of LLM clients" in Rust. Vector-store traits map cleanly onto cyb's IPFS+graph backend. WASM build matters because cyb's leptos UI runs in the browser.
 
 #### [chidori](https://github.com/ThousandBirdsInc/chidori)
