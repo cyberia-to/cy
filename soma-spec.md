@@ -1047,6 +1047,55 @@ loop:
 
 Each turn is a local graph walk and a local decision. Global coordination emerges through φ* convergence — no central scheduler, no global recompute, no fragile hierarchy.
 
+## The cybergraph interface
+
+Soma talks to a cybergraph instance, not to "the network". Cybergraph is a local-first cyberlink processor — a pluggable component that operates on whatever cyberlink set it is pointed at: a single Neuron's history, an Avatar's full graph across Bodies, a regional aggregate, or the planetary union. Soma's wires do not change with the scope; only the underlying data does.
+
+Three verbs span the entire interface:
+
+| verb | direction | purpose |
+|---|---|---|
+| `query(inf_script)` | soma → cybergraph | run an [[inf]] (CozoDB datalog) query over cybergraph relations |
+| `subscribe(filter)` | cybergraph → soma | stream events that match the filter as new cyberlinks land |
+| `submit(signal)` | soma → cybergraph | hand off a signed, proven signal for validation, ordering, and commit |
+
+The four soma loops map onto these wires as follows.
+
+| loop | reads (`query` / `subscribe`) | writes (`submit`) |
+|---|---|---|
+| perception-action | events on my Particles, φ\* shifts, cyberlinks targeting me | attribution, decision, verdict cyberlinks |
+| homeostasis | energy markets, bounty board, prices on my Token | bids for compute, bounty postings |
+| attention | high-φ\* Particles near my current Task, consolidation candidates | consolidation cyberlinks, salience updates |
+| market | open positions, token rates, sigma-relevant moves | trades, conviction adjustments |
+
+The closed cognition loop:
+
+```
+soma deliberates                                 — four loops over local working memory
+   ↓
+constructs signal via rune                       — imperative graph mutation
+   ↓
+nox produces σ                                   — STARK proof of inference
+   ↓
+cybergraph.submit(signal)                        — validate + order locally
+   ↓ (cybergraph delegates state to bbg, distribution to sync)
+   bbg.apply(signal)                             — append-only commit
+   ↓
+   tru recomputes φ\* / karma                    — convergence step
+   ↓
+cybergraph.subscribe emits event                 — soma's filter matches
+   ↓
+soma receives event                              — back into perception
+```
+
+Architectural rules that fall out:
+
+1. Soma never bypasses cybergraph. The signal envelope (with `prev`, `vdf`, `step`) is the only entry. No direct bbg writes from soma — this preserves the causal chain invariants that make the local cybergraph composable with peer cybergraphs through sync.
+2. Cybergraph's scope is set by configuration, not by soma. The same three verbs serve a single-Avatar deployment, a clustered deployment, and a fully synced node. Soma codes against the verbs; the surrounding stack (sync, foculus) decides how broad the data is.
+3. `inf` is soma's primary read API — not raw bbg openings. Soma queries cybergraph relations as a CozoDB user. Provability is opt-in per query; interactive queries skip the proof step.
+4. Subscriptions are the awakening primitive. Soma's attention loop pivots on event arrival rather than polling; this is what "wakes on a machine and knows what it is" means in code.
+5. Tier-3 model decisions (the irreversible <5% that escalate to external oracle) submit with extra commitment fields so the audit trail of an irreversible action is itself a cyberlink chain.
+
 ---
 
 # 8. Memory — how soma remembers

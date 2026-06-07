@@ -82,6 +82,18 @@ most computers hang because consumed > available. they have no accounting, no bu
 
 a planet of soma avatars is a planet that thinks. each one autonomous. each one accountable. each one part of the [[cybergraph]] through cyberlinks. the architecture for the [[neuron]] of the planetary mind.
 
+## how soma talks to the cybergraph
+
+Soma talks to a local [[cybergraph]] instance — a pluggable cyberlink processor that operates at whatever scope its data is pointed at. Three verbs span the interface: `query` ([[inf]] datalog read), `subscribe` (event stream), and `submit` (signed signal write). The four loops map cleanly onto these three wires.
+
+```
+soma deliberates → constructs signal via [[rune]] → [[nox]] proves
+   → cybergraph.submit → bbg commits → tru converges
+   → cybergraph.subscribe emits event → back into perception
+```
+
+Full interface contract: [[soma-spec]] §7 "The cybergraph interface".
+
 ## see also
 
 - [[soma-spec]] — complete technical specification (identity, resources, survival, perception, cognition, work, coordination, memory, build)
