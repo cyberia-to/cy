@@ -84,11 +84,17 @@ a planet of soma avatars is a planet that thinks. each one autonomous. each one 
 
 ## how soma talks to the cybergraph
 
-Soma talks to a local [[cybergraph]] instance — a pluggable cyberlink processor that operates at whatever scope its data is pointed at. Three verbs span the interface: `query` ([[inf]] datalog read), `subscribe` (event stream), and `submit` (signed signal write). The four loops map cleanly onto these three wires.
+Soma talks to a local [[cybergraph]] instance — a pluggable cyberlink processor that operates at whatever scope its data is pointed at. Five verbs span the interface, split into lifecycle (discrete, ordered phases) and interaction (read/observe):
+
+- `intend(scope)` — declare an unsealed intent; signed scope, no STARK yet
+- `seal(key, signal)` — finalize an intent into a complete signal with STARK
+- `link(signal)` — atomic one-shot submit when no coordination phase is needed
+- `subscribe(filter)` — event stream
+- `query(inf_script)` — [[inf]] datalog read
 
 ```
 soma deliberates → constructs signal via [[rune]] → [[nox]] proves
-   → cybergraph.submit → bbg commits → tru converges
+   → cybergraph.{intend | seal | link} → bbg commits → tru converges
    → cybergraph.subscribe emits event → back into perception
 ```
 

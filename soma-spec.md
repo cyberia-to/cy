@@ -1051,22 +1051,28 @@ Each turn is a local graph walk and a local decision. Global coordination emerge
 
 Soma talks to a cybergraph instance, not to "the network". Cybergraph is a local-first cyberlink processor — a pluggable component that operates on whatever cyberlink set it is pointed at: a single Neuron's history, an Avatar's full graph across Bodies, a regional aggregate, or the planetary union. Soma's wires do not change with the scope; only the underlying data does.
 
-Three verbs span the entire interface:
+Five verbs span the entire interface, split into lifecycle (discrete, ordered phases) and interaction (read/observe):
 
 | verb | direction | purpose |
 |---|---|---|
-| `query(inf_script)` | soma → cybergraph | run an [[inf]] (CozoDB datalog) query over cybergraph relations |
-| `subscribe(filter)` | cybergraph → soma | stream events that match the filter as new cyberlinks land |
-| `submit(signal)` | soma → cybergraph | hand off a signed, proven signal for validation, ordering, and commit |
+| **lifecycle** | | |
+| `intend(scope)` | soma → cybergraph | declare an unsealed intent — signed scope, no STARK yet; persisted in bbg's intents dimension until sealed or abandoned |
+| `seal(key, signal)` | soma → cybergraph | finalize a previously-declared intent into a signal with STARK proof |
+| `link(signal)` | soma → cybergraph | atomic one-shot submit — used when the action is a discrete local statement that does not need an intent phase |
+| **interaction** | | |
+| `subscribe(filter)` | cybergraph → soma | stream events as cyberlinks, intents, and seals land |
+| `query(inf_script)` | soma → cybergraph | run an [[inf]] (CozoScript datalog) query over cybergraph relations |
 
-The four soma loops map onto these wires as follows.
+The four soma loops map onto these verbs as follows.
 
-| loop | reads (`query` / `subscribe`) | writes (`submit`) |
+| loop | reads (`query` / `subscribe`) | writes (`intend` / `seal` / `link`) |
 |---|---|---|
-| perception-action | events on my Particles, φ\* shifts, cyberlinks targeting me | attribution, decision, verdict cyberlinks |
-| homeostasis | energy markets, bounty board, prices on my Token | bids for compute, bounty postings |
-| attention | high-φ\* Particles near my current Task, consolidation candidates | consolidation cyberlinks, salience updates |
-| market | open positions, token rates, sigma-relevant moves | trades, conviction adjustments |
+| perception-action | events on my Particles, φ\* shifts, cyberlinks targeting me | `link` for attribution / verdict; `intend → seal` when coordination with peers matters |
+| homeostasis | energy markets, bounty board, prices on my Token | `link` for bids; `intend → seal` for bounty postings observable before fulfilment |
+| attention | high-φ\* Particles near my current Task, consolidation candidates | `link` consolidation cyberlinks |
+| market | open positions, token rates, sigma-relevant moves | `link` for trades; `intend → seal` for multi-step conviction adjustments |
+
+The choice between `link` and `intend → seal` is a lifecycle question. Use `link` when the action is local and atomic. Use `intend → seal` when the action invites coordination — other neurons can observe the intent and cascade with sub-signals before the lead neuron seals the parent.
 
 The closed cognition loop:
 
@@ -1077,9 +1083,10 @@ constructs signal via rune                       — imperative graph mutation
    ↓
 nox produces σ                                   — STARK proof of inference
    ↓
-cybergraph.submit(signal)                        — validate + order locally
-   ↓ (cybergraph delegates state to bbg, distribution to sync)
-   bbg.apply(signal)                             — append-only commit
+cybergraph.{intend | seal | link}(payload)       — pick the right lifecycle verb
+   ├── intend → bbg.apply_intent + sync broadcast
+   ├── seal   → sync.order_and_chain + bbg.apply_signal_record + sync broadcast
+   └── link   → sync.order_and_chain + bbg.insert + sync broadcast
    ↓
    tru recomputes φ\* / karma                    — convergence step
    ↓
@@ -1087,6 +1094,8 @@ cybergraph.subscribe emits event                 — soma's filter matches
    ↓
 soma receives event                              — back into perception
 ```
+
+Internal fan-out: cybergraph delegates state to bbg, sync-protocol mechanics (chain, VDF, equivocation, DAS, CRDT) to cyber-sync, and wire bytes to radio. radio carries tape-framed cyber-dialect particles; sync mints and decodes the frames. soma sees one funnel.
 
 Architectural rules that fall out:
 
