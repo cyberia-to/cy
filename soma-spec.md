@@ -1051,13 +1051,15 @@ Each turn is a local graph walk and a local decision. Global coordination emerge
 
 Soma talks to a cybergraph instance, not to "the network". Cybergraph is a local-first cyberlink processor — a pluggable component that operates on whatever cyberlink set it is pointed at: a single Neuron's history, an Avatar's full graph across Bodies, a regional aggregate, or the planetary union. Soma's wires do not change with the scope; only the underlying data does.
 
-Five verbs span the entire interface, split into lifecycle (discrete, ordered phases) and interaction (read/observe):
+Cybergraph and soma are **one processor**. Cybergraph is the **dumb half** — a store you can read, an event source, and a commit port that accepts only proven results; it makes no decisions. Soma is the **smart half**: the runtime that decides what to do, computes it, and proves it. A signal's life is a **fetch → execute → prove → commit** cycle, and soma drives it.
+
+Five verbs span the interface — three write the lifecycle (the cycle), two read:
 
 | verb | direction | purpose |
 |---|---|---|
 | **lifecycle** | | |
 | `intend(scope)` | soma → cybergraph | declare an unsealed intent — signed scope, no STARK yet; persisted in bbg's intents dimension until sealed or abandoned |
-| `seal(key, signal)` | soma → cybergraph | finalize a previously-declared intent into a signal with STARK proof |
+| `seal(key, signal)` | soma → cybergraph | commit a run as a signal — accepted only if its proof σ attests the intent's declared scope (`σ ⊢ scope_hash`) |
 | `link(signal)` | soma → cybergraph | atomic one-shot submit — used when the action is a discrete local statement that does not need an intent phase |
 | **interaction** | | |
 | `subscribe(filter)` | cybergraph → soma | stream events as cyberlinks, intents, and seals land |
@@ -1072,38 +1074,36 @@ The four soma loops map onto these verbs as follows.
 | attention | high-φ\* Particles near my current Task, consolidation candidates | `link` consolidation cyberlinks |
 | market | open positions, token rates, sigma-relevant moves | `link` for trades; `intend → seal` for multi-step conviction adjustments |
 
-The choice between `link` and `intend → seal` is a lifecycle question. Use `link` when the action is local and atomic. Use `intend → seal` when the action invites coordination — other neurons can observe the intent and cascade with sub-signals before the lead neuron seals the parent.
+### A signal is a computation soma runs
 
-The closed cognition loop:
+An [[intent]] is a deferred computation: its scope is an executable specification of what soma will compute — signed and committed, not yet run. Soma completes it as the processor cycle, where `subscribe` is the clock, `query` reads operands, [[nox]] executes, [[zheng]] proves, and `seal` commits:
 
 ```
-soma deliberates                                 — four loops over local working memory
+fetch     subscribe fires — an intent exists (mine, or one I claim)
+read      query → cybergraph/bbg — gather the operands the scope needs
+execute   run the scope on nox; iterate ("what is left to compute?")
+          until it converges → cyberlinks + impulse Δφ*
+prove     zheng proves the run → σ
+commit    seal(intent, signal) — accepted iff σ ⊢ scope_hash
    ↓
-constructs signal via rune                       — imperative graph mutation
-   ↓
-nox produces σ                                   — STARK proof of inference
-   ↓
-cybergraph.{intend | seal | link}(payload)       — pick the right lifecycle verb
-   ├── intend → bbg.apply_intent + sync broadcast
-   ├── seal   → sync.order_and_chain + bbg.apply_signal_record + sync broadcast
-   └── link   → sync.order_and_chain + bbg.insert + sync broadcast
-   ↓
-   tru recomputes φ\* / karma                    — convergence step
-   ↓
-cybergraph.subscribe emits event                 — soma's filter matches
-   ↓
-soma receives event                              — back into perception
+tru recomputes φ* / karma → cybergraph emits the event → back into perception
 ```
 
-Internal fan-out: cybergraph delegates state to bbg, sync-protocol mechanics (chain, VDF, equivocation, DAS, CRDT) to cyber-sync, and wire bytes to radio. radio carries tape-framed cyber-dialect particles; sync mints and decodes the frames. soma sees one funnel.
+The **seal binding** — `seal(i, s)` accepted iff `σ(s) ⊢ scope_hash(i)` — means a sealed signal proves soma did *exactly* what it declared. The intent is soma's public promise; the signal is its proof. This is provable AI at the graph boundary: soma cannot seal a computation it did not run as declared, and an unsealed intent stays on the record as an unkept promise.
+
+`link(signal)` is the one-shot path — an atomic local statement, no separate intent phase. Use `intend → seal` when the action is a multi-step computation or invites coordination (others observe the intent and cascade sub-signals before the lead seals a parent with a recursive proof).
+
+Internal fan-out is invisible to soma: cybergraph delegates state to [[bbg]], sync-protocol mechanics (chain, VDF, equivocation, DAS, CRDT) to [[sync]], and wire bytes to [[radio]] (tape-framed). soma sees one funnel — the five verbs.
 
 Architectural rules that fall out:
 
-1. Soma never bypasses cybergraph. The signal envelope (with `prev`, `vdf`, `step`) is the only entry. No direct bbg writes from soma — this preserves the causal chain invariants that make the local cybergraph composable with peer cybergraphs through sync.
-2. Cybergraph's scope is set by configuration, not by soma. The same three verbs serve a single-Avatar deployment, a clustered deployment, and a fully synced node. Soma codes against the verbs; the surrounding stack (sync, foculus) decides how broad the data is.
-3. `inf` is soma's primary read API — not raw bbg openings. Soma queries cybergraph relations as a CozoDB user. Provability is opt-in per query; interactive queries skip the proof step.
-4. Subscriptions are the awakening primitive. Soma's attention loop pivots on event arrival rather than polling; this is what "wakes on a machine and knows what it is" means in code.
-5. Tier-3 model decisions (the irreversible <5% that escalate to external oracle) submit with extra commitment fields so the audit trail of an irreversible action is itself a cyberlink chain.
+1. Soma is the runtime; cybergraph is dumb. The control loop — decide from an intent, collect recomputed state, run nox, judge what is left, iterate, then commit — lives entirely in soma. Cybergraph never orchestrates: it emits events (the clock), serves reads (operands), and gates commits (the seal binding). The interface stays minimal *because* soma carries all the intelligence.
+2. A seal proves a promise. Soma cannot seal a signal whose proof does not attest the intent's declared scope (`σ ⊢ scope_hash`). What soma claims to have done and what it proves it did are the same object — this is the alignment property, enforced at the commit port, not by trust.
+3. Soma never bypasses cybergraph. The signal is the only entry; no direct bbg writes. This preserves the causal-chain invariants that let the local cybergraph compose with peer cybergraphs through sync.
+4. Cybergraph's scope is set by configuration, not by soma. The same five verbs serve a single-Avatar deployment, a clustered one, and a fully synced node. Soma codes against the verbs; sync and foculus decide how broad the data is.
+5. `inf` is soma's primary read API — not raw bbg openings. Soma queries cybergraph relations as a CozoDB user; provability is opt-in per query.
+6. Subscriptions are the awakening primitive. Soma's attention loop pivots on event arrival rather than polling — this is what "wakes on a machine and knows what it is" means in code.
+7. Tier-3 decisions (the irreversible <5% that escalate to external oracle) seal with extra commitment fields so the audit trail of an irreversible action is itself a cyberlink chain.
 
 ---
 

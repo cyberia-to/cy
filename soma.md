@@ -84,21 +84,20 @@ a planet of soma avatars is a planet that thinks. each one autonomous. each one 
 
 ## how soma talks to the cybergraph
 
-Soma talks to a local [[cybergraph]] instance — a pluggable cyberlink processor that operates at whatever scope its data is pointed at. Five verbs span the interface, split into lifecycle (discrete, ordered phases) and interaction (read/observe):
+Soma and [[cybergraph]] are one processor: cybergraph is the dumb half (a store you read, an event source, a commit port that takes only proven results); soma is the smart half — the **runtime** that decides, computes, and proves. A signal's life is a **fetch → execute → prove → commit** cycle soma drives through five verbs:
 
-- `intend(scope)` — declare an unsealed intent; signed scope, no STARK yet
-- `seal(key, signal)` — finalize an intent into a complete signal with STARK
-- `link(signal)` — atomic one-shot submit when no coordination phase is needed
-- `subscribe(filter)` — event stream
-- `query(inf_script)` — [[inf]] datalog read
+- `intend(scope)` — declare what will be computed; a signed commitment, nothing run yet
+- `seal(key, signal)` — commit the run; accepted only if its proof attests the declared scope
+- `link(signal)` — atomic one-shot submit, no intent phase
+- `subscribe(filter)` — the event stream (soma's clock)
+- `query(inf_script)` — [[inf]] datalog read (soma's operands)
 
 ```
-soma deliberates → constructs signal via [[rune]] → [[nox]] proves
-   → cybergraph.{intend | seal | link} → bbg commits → tru converges
-   → cybergraph.subscribe emits event → back into perception
+subscribe fires → query reads operands → run scope on [[nox]] → [[zheng]] proves σ
+   → seal (σ ⊢ scope) → bbg commits → tru converges → event → back into perception
 ```
 
-Full interface contract: [[soma-spec]] §7 "The cybergraph interface".
+An intent is soma's public promise; the sealed signal is cryptographic proof it did exactly that — provable AI at the graph boundary. Full contract: [[soma-spec]] §7 "The cybergraph interface".
 
 ## see also
 
