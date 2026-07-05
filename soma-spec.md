@@ -1093,7 +1093,7 @@ The **seal binding** — `seal(i, s)` accepted iff `σ(s) ⊢ scope_hash(i)` —
 
 `link(signal)` is the one-shot path — an atomic local statement, no separate intent phase. Use `intend → seal` when the action is a multi-step computation or invites coordination (others observe the intent and cascade sub-signals before the lead seals a parent with a recursive proof).
 
-Internal fan-out is invisible to soma: cybergraph delegates state to [[bbg]], sync-protocol mechanics (chain, VDF, equivocation, DAS, CRDT) to [[sync]], and wire bytes to [[radio]] (tape-framed). soma sees one funnel — the five verbs.
+Internal fan-out is invisible to soma: cybergraph delegates state to [[bbg]], sync-protocol mechanics (chain, VDF, equivocation, DAS, CRDT) to [[foculus]], and wire bytes to [[radio]] (tape-framed). soma sees one funnel — the five verbs.
 
 Architectural rules that fall out:
 
