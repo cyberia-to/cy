@@ -47,12 +47,12 @@ Everything reduces to configurations of these five + typed cyberlinks.
 - **Tier 2** (<6s load): qwen3.5-9b + qwen2.5-coder-14b + mimo-7b + deepseek-r1-8b + qwen2.5-vl-7b
 - **Tier 3** (external): Anthropic API + Perplexity (irreversible decisions only, <5%)
 
-All inference runs in nox with STARK proof. Provable AI.
+All inference runs in nox with a zheng proof. Provable AI.
 
 ## Key dependencies
 
 - **bbg** — append-only memory substrate; polynomial commitment; no locks
-- **nox** — STARK VM; every inference is proven
+- **nox** — provable VM; every inference gets a zheng proof
 - **cybergraph** — coordination graph; particle + cyberlink storage
 - **tri-kernel** — D (diffusion) + S (springs) + H (heat) tri-kernel recomputation
 - **zheng** — proof system (~5μs verify)

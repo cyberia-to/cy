@@ -48,7 +48,7 @@ four loops run concurrently, each at its own timescale:
 
 each loop runs over a tiered model architecture: ~1.5GB always-on substrate of 8 small specialists, ~1-2s fast on-demand workhorses, ~3-6s quality on-demand reasoning, external API for irreversible decisions. 19 models total — small specialists beat one large generalist on precision, speed, reliability, and evolvability.
 
-every model inference runs in [[nox]] with a STARK proof. provable AI — the model cannot lie.
+every model inference runs in [[nox]] with a [[zheng]] proof. provable AI — the model cannot lie.
 
 ## how soma survives
 
@@ -78,7 +78,7 @@ every higher-level concept (project, team, channel, milestone, contract, role) r
 
 ## why it matters
 
-most computers hang because consumed > available. they have no accounting, no budget, no priority model, no resource market. soma is the architecture that closes that loop — every operation has a price, every loop has a budget, every resource has a forecast, every action has a STARK proof.
+most computers hang because consumed > available. they have no accounting, no budget, no priority model, no resource market. soma is the architecture that closes that loop — every operation has a price, every loop has a budget, every resource has a forecast, every action has a [[zheng]] proof.
 
 a planet of soma avatars is a planet that thinks. each one autonomous. each one accountable. each one part of the [[cybergraph]] through cyberlinks. the architecture for the [[neuron]] of the planetary mind.
 

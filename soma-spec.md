@@ -305,7 +305,7 @@ Loaded when needed for richer expression:
 
 # 5. Cognition — how soma thinks
 
-Cognition runs as four concurrent loops over a tiered model architecture. Each loop is a Skill<Composite> (see Work) with explicit termination and persistence. Each step is in the [[nox]] STARK trace — every model inference is provable.
+Cognition runs as four concurrent loops over a tiered model architecture. Each loop is a Skill<Composite> (see Work) with explicit termination and persistence. Each step is in the [[nox]] execution trace, proven by [[zheng]] — every model inference is provable.
 
 ## The four soma loops
 
@@ -679,12 +679,12 @@ Tasks can have sub-Tasks via `parent_task` cyberlinks. A Task with sub-Tasks is 
 
 ### Order — Task in flight on nox
 
-An Order is a Task<kind=Work> in execution: a [[nox]] formula running in the STARK trace. Order ⊂ Task. Every Task<kind=Work> that runs on a Body becomes an Order when nox accepts it for execution.
+An Order is a Task<kind=Work> in execution: a [[nox]] formula running in the [[zheng]]-proven trace. Order ⊂ Task. Every Task<kind=Work> that runs on a Body becomes an Order when nox accepts it for execution.
 
 Orders are the unit of:
 - nox metering (every step priced)
 - market exchange (Orders bought and sold in the energy/compute market)
-- proof generation (the STARK trace of an Order is the proof of its execution)
+- proof generation (the [[zheng]] proof of an Order's trace attests its execution)
 
 When Loop 4 (market) accepts a profitable Order from a neighbor, the Avatar binds that Task<kind=Work> to an Order on its nox VM and runs it.
 
@@ -1058,7 +1058,7 @@ Five verbs span the interface — three write the lifecycle (the cycle), two rea
 | verb | direction | purpose |
 |---|---|---|
 | **lifecycle** | | |
-| `intend(scope)` | soma → cybergraph | declare an unsealed intent — signed scope, no STARK yet; persisted in bbg's intents dimension until sealed or abandoned |
+| `intend(scope)` | soma → cybergraph | declare an unsealed intent — signed scope, no [[zheng]] proof yet; persisted in bbg's intents dimension until sealed or abandoned |
 | `seal(key, signal)` | soma → cybergraph | commit a run as a signal — accepted only if its proof σ attests the intent's declared scope (`σ ⊢ scope_hash`) |
 | `link(signal)` | soma → cybergraph | atomic one-shot submit — used when the action is a discrete local statement that does not need an intent phase |
 | **interaction** | | |

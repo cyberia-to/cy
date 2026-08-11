@@ -64,7 +64,7 @@ Phase 3:         FPGA/ASIC. Rust disappears.
 
 ## proof boundary
 
-everything provable except device read/write (physics ≠ math). soma decisions, metabolism, hal dispatch — all [[nox]] formulas in STARK trace. see [[cyb/os]] for the full boundary table.
+everything provable except device read/write (physics ≠ math). soma decisions, metabolism, hal dispatch — all [[nox]] formulas in the [[zheng]]-proven trace. see [[cyb/os]] for the full boundary table.
 
 ## intelligence
 
