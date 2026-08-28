@@ -1,0 +1,20 @@
+[package]
+name = "soma-kernel"
+version = "0.1.0"
+edition = "2021"
+description = "soma phase 1 — the cognition loop: a question in, an answer out, both linked into the cybergraph"
+
+[lib]
+name = "soma_kernel"
+path = "src/lib.rs"
+
+[dependencies]
+# glia is the model layer: soma decides *what* to think about, glia runs the
+# thinking. soma never touches tensors.
+run    = { path = "../../glia/run" }
+# the project's canonical hash — a particle IS hemera::hash(content).
+hemera = { package = "cyber-hemera", version = "0.3", path = "../../hemera/rs" }
+log    = "0.4"
+
+[dev-dependencies]
+env_logger = "0.11"

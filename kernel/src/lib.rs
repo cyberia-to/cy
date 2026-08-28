@@ -1,0 +1,361 @@
+//! soma-kernel — the first running piece of soma: one cognition loop.
+//!
+//! A question comes in as text; soma turns it over to glia (the model layer),
+//! gets an answer back, and remembers the exchange as content-addressed
+//! particles ready to be linked into a cybergraph. That is the whole of phase
+//! 1: think locally, leave a trace in the graph. The four loops, the market,
+//! the Body budget — all of that arrives later and *around* this, because
+//! whatever else soma becomes, this is the part it does all day.
+//!
+//! Boundaries, deliberately kept:
+//! - soma decides *what* to think about; glia runs the thinking. No tensor,
+//!   dtype or backend name crosses into this crate's API.
+//! - soma produces particles and the *text* behind them; committing links is
+//!   the cell's job (the caller's), because the cell owns the neuron identity
+//!   and the signal chain. soma has no keys.
+//!
+//! The mind runs on its own thread. Model loading takes a second and
+//! generation takes a few more, and the caller is typically a UI frame loop
+//! that cannot wait for either. [`Soma::ask`] returns immediately;
+//! [`Soma::poll`] hands back [`SomaEvent`]s as they happen.
+
+use std::fs::OpenOptions;
+use std::io::Write as _;
+use std::path::PathBuf;
+use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
+
+use run::backend::Backend;
+use run::generate::{generate, ModelRunner, SampleConfig, SampleKind};
+use run::tokenizer::ChatMessage;
+
+/// A particle is the project's canonical hash of the content. Text in,
+/// 32 bytes out; the same text is the same particle on every machine, which is
+/// what lets independently-running minds converge on a shared graph.
+pub fn particle_of(text: &str) -> [u8; 32] {
+    let h = hemera::hash(text.as_bytes());
+    let b = h.as_bytes();
+    let mut out = [0u8; 32];
+    let n = b.len().min(32);
+    out[..n].copy_from_slice(&b[..n]);
+    out
+}
+
+/// The anchor every exchange hangs off: `particle_of("soma")`. One well-known
+/// particle, so all of a mind's Q→A pairs are reachable from a single root
+/// instead of floating as disconnected islands.
+pub fn soma_anchor() -> [u8; 32] {
+    particle_of("soma")
+}
+
+/// What soma has to say back, in the order it says it.
+#[derive(Debug, Clone)]
+pub enum SomaEvent {
+    /// The model is loading. Happens once, on the first question.
+    Waking,
+    /// The mind is running the question. Sent as generation starts.
+    Thinking,
+    /// The answer, with the question it answers.
+    Answer {
+        question: String,
+        answer: String,
+        tokens: usize,
+        tok_per_s: f32,
+    },
+    /// The mind failed. The text says how; the mind stays up for the next ask.
+    Error(String),
+}
+
+/// Where the mind's weights and habits come from.
+#[derive(Debug, Clone)]
+pub struct SomaConfig {
+    /// Path to a glia `.model` file.
+    pub model: PathBuf,
+    /// Longest answer soma will produce, in tokens.
+    pub max_tokens: usize,
+    pub temperature: f32,
+    /// Sidecar file mapping particle → the text it hashes. The graph stores
+    /// hashes; whoever renders it will want the words back.
+    pub particles: Option<PathBuf>,
+}
+
+impl Default for SomaConfig {
+    /// `SOMA_MODEL` overrides; otherwise the smallest model in `~/llm` that
+    /// answers well enough to be worth linking.
+    fn default() -> Self {
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        let model = std::env::var("SOMA_MODEL")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| PathBuf::from(&home).join("llm/qwen3-0.6b-abl.model"));
+        Self {
+            model,
+            max_tokens: 512,
+            temperature: 0.7,
+            particles: Some(PathBuf::from(&home).join("cyb/particles.jsonl")),
+        }
+    }
+}
+
+/// A handle to the mind's thread. Cheap to hold, immediate to call.
+pub struct Soma {
+    ask_tx: Sender<String>,
+    event_rx: Receiver<SomaEvent>,
+}
+
+impl Soma {
+    /// Start the mind. The thread is spawned now; the model is loaded lazily
+    /// on the first question, so a cyb that is never asked anything never
+    /// pays for the weights.
+    pub fn spawn(cfg: SomaConfig) -> Self {
+        let (ask_tx, ask_rx) = channel::<String>();
+        let (event_tx, event_rx) = channel::<SomaEvent>();
+        std::thread::Builder::new()
+            .name("soma".into())
+            .spawn(move || mind_loop(cfg, ask_rx, event_tx))
+            .expect("spawn soma thread");
+        Self { ask_tx, event_rx }
+    }
+
+    /// Hand the mind a question. Returns immediately; the answer arrives
+    /// through [`Soma::poll`]. Questions queue — a second ask while the first
+    /// is generating runs after it.
+    pub fn ask(&self, question: impl Into<String>) {
+        let _ = self.ask_tx.send(question.into());
+    }
+
+    /// The next event, if one has happened. Non-blocking: call it from a
+    /// frame loop.
+    pub fn poll(&self) -> Option<SomaEvent> {
+        match self.event_rx.try_recv() {
+            Ok(ev) => Some(ev),
+            Err(TryRecvError::Empty) => None,
+            Err(TryRecvError::Disconnected) => Some(SomaEvent::Error(
+                "soma thread is gone".into(),
+            )),
+        }
+    }
+}
+
+// ── the mind's thread ────────────────────────────────────────────────────────
+
+/// The loaded model with everything needed to run it. Lives only on the
+/// mind's thread; nothing here is shared.
+struct LoadedMind {
+    model: run::arch::decoder::LlamaModel,
+    tokenizer: run::Tokenizer,
+    backend: Box<dyn Backend>,
+}
+
+fn mind_loop(cfg: SomaConfig, ask_rx: Receiver<String>, event_tx: Sender<SomaEvent>) {
+    let mut mind: Option<LoadedMind> = None;
+
+    while let Ok(question) = ask_rx.recv() {
+        // Wake on first use.
+        if mind.is_none() {
+            let _ = event_tx.send(SomaEvent::Waking);
+            match wake(&cfg) {
+                Ok(m) => mind = Some(m),
+                Err(e) => {
+                    let _ = event_tx.send(SomaEvent::Error(e));
+                    continue;
+                }
+            }
+        }
+        let m = mind.as_mut().unwrap();
+
+        let _ = event_tx.send(SomaEvent::Thinking);
+        let t0 = std::time::Instant::now();
+        match think(m, &question, &cfg) {
+            Ok((answer, tokens)) => {
+                let secs = t0.elapsed().as_secs_f32().max(1e-3);
+                remember(&cfg, &question);
+                remember(&cfg, &answer);
+                let _ = event_tx.send(SomaEvent::Answer {
+                    question,
+                    answer,
+                    tokens,
+                    tok_per_s: tokens as f32 / secs,
+                });
+            }
+            Err(e) => {
+                let _ = event_tx.send(SomaEvent::Error(e));
+            }
+        }
+    }
+}
+
+fn wake(cfg: &SomaConfig) -> Result<LoadedMind, String> {
+    if !cfg.model.exists() {
+        return Err(format!(
+            "no model at {} — set SOMA_MODEL to a glia .model file",
+            cfg.model.display()
+        ));
+    }
+    let lm = run::LoadedModel::load(&cfg.model).map_err(|e| format!("model load: {e}"))?;
+    let tokenizer =
+        run::tokenizer::build_tokenizer(&lm).map_err(|e| format!("tokenizer: {e}"))?;
+    let model = run::arch::decoder::LlamaModel::from_loaded(&lm)
+        .map_err(|e| format!("model build: {e}"))?;
+
+    // CPU by default, deliberately. The honeycrisp backend deadlocks when
+    // driven from any thread but the main one — measured here: the same
+    // model that answers in 1.3s from the CLI never returns from a spawned
+    // thread — and soma always runs on its own thread, inside hosts (cyb)
+    // whose main thread already owns a GPU. The reference backend does
+    // ~21 tok/s on the default 0.6B model, which thinking can afford.
+    // `SOMA_BACKEND=honeycrisp|wgpu` overrides for experiments.
+    let choice = std::env::var("SOMA_BACKEND").unwrap_or_else(|_| "cpu".into());
+    let backend: Box<dyn Backend> = match choice.as_str() {
+        "cpu" => Box::new(run::backend::cpu::CpuBackend::new()),
+        "wgpu" => match run::backend::wgpu::WgpuRsBackend::new() {
+            Ok(b) => Box::new(b),
+            Err(_) => Box::new(run::backend::cpu::CpuBackend::new()),
+        },
+        #[cfg(target_os = "macos")]
+        "honeycrisp" => match run::backend::honeycrisp::HoneycrispBackend::new() {
+            Ok(b) => Box::new(b),
+            Err(_) => Box::new(run::backend::cpu::CpuBackend::new()),
+        },
+        _ => Box::new(run::backend::cpu::CpuBackend::new()),
+    };
+    log::info!("soma: backend {:?}", backend.kind());
+
+    log::info!("soma: awake — {}", cfg.model.display());
+    Ok(LoadedMind { model, tokenizer, backend })
+}
+
+fn think(
+    m: &mut LoadedMind,
+    question: &str,
+    cfg: &SomaConfig,
+) -> Result<(String, usize), String> {
+    // The model's own chat template, then an empty think block appended. The
+    // qwen3 family spends its whole token budget deliberating inside
+    // <think> unless the block is already there and closed — this is the
+    // documented way to ask it to just answer.
+    let mut prompt = run::generate::build_chat_prompt(
+        &m.tokenizer,
+        &[ChatMessage {
+            role: "user".into(),
+            content: question.into(),
+        }],
+    );
+    prompt.push_str("<think>\n\n</think>\n\n");
+
+    let sample = SampleConfig {
+        method: if cfg.temperature > 0.0 { SampleKind::TopP } else { SampleKind::Greedy },
+        temperature: cfg.temperature,
+        top_p: 0.95,
+        top_k: 40,
+    };
+
+    let (raw, tokens) = generate(
+        &mut m.model as &mut dyn ModelRunner,
+        &m.tokenizer,
+        m.backend.as_ref(),
+        &prompt,
+        cfg.max_tokens,
+        sample,
+    )
+    .map_err(|e| format!("generate: {e}"))?;
+
+    Ok((tidy(&raw), tokens))
+}
+
+/// Strip whatever deliberation leaked into the answer anyway, and trim.
+fn tidy(raw: &str) -> String {
+    let mut s = raw;
+    // A closed think block: drop it and keep what follows.
+    if let Some(open) = s.find("<think>") {
+        if let Some(close) = s.find("</think>") {
+            if close > open {
+                return format!("{}{}", &s[..open], s[close + "</think>".len()..].trim_start())
+                    .trim()
+                    .to_string();
+            }
+        }
+        // An unclosed think block means the budget ran out mid-thought;
+        // everything after the tag is deliberation, not an answer.
+        s = &s[..open];
+    }
+    s.trim().to_string()
+}
+
+/// Append `(particle, text)` to the sidecar, so the hashes in the graph can be
+/// turned back into words. Append-only and line-oriented for the same reason
+/// the cell's log is: it survives anything short of losing the disk.
+fn remember(cfg: &SomaConfig, text: &str) {
+    let Some(path) = &cfg.particles else { return };
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    let hex: String = particle_of(text).iter().map(|b| format!("{b:02x}")).collect();
+    // Hand-rolled JSON with the one escape pass it needs — a dependency for
+    // one line would be the heavier tool.
+    let escaped = text
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n");
+    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
+        let _ = writeln!(f, "{{\"particle\":\"{hex}\",\"text\":\"{escaped}\"}}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn particles_are_stable_and_distinct() {
+        assert_eq!(particle_of("a question"), particle_of("a question"));
+        assert_ne!(particle_of("a question"), particle_of("an answer"));
+        assert_ne!(soma_anchor(), particle_of(""));
+    }
+
+    #[test]
+    fn tidy_strips_closed_think_blocks() {
+        assert_eq!(tidy("<think>\nhmm\n</think>\n\nParis."), "Paris.");
+        assert_eq!(tidy("Paris."), "Paris.");
+        // Unclosed: the budget died mid-thought; there is no answer to keep.
+        assert_eq!(tidy("prefix <think>endless deliberation"), "prefix");
+    }
+
+    /// The full loop against the real model: ask, get an answer, see the
+    /// events in order. Skipped quietly when no model is installed, because
+    /// CI machines do not carry weights.
+    #[test]
+    fn asks_the_real_model() {
+        let cfg = SomaConfig::default();
+        if !cfg.model.exists() {
+            eprintln!("skipping: no model at {}", cfg.model.display());
+            return;
+        }
+        let soma = Soma::spawn(SomaConfig {
+            max_tokens: 64,
+            temperature: 0.0,
+            particles: None,
+            ..cfg
+        });
+        soma.ask("Reply with exactly one word: ready");
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        let mut saw_waking = false;
+        loop {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "soma did not answer within two minutes"
+            );
+            match soma.poll() {
+                Some(SomaEvent::Waking) => saw_waking = true,
+                Some(SomaEvent::Thinking) => {}
+                Some(SomaEvent::Answer { answer, tokens, .. }) => {
+                    assert!(saw_waking, "answered without waking first");
+                    assert!(tokens > 0);
+                    assert!(!answer.trim().is_empty(), "empty answer");
+                    break;
+                }
+                Some(SomaEvent::Error(e)) => panic!("soma error: {e}"),
+                None => std::thread::sleep(std::time::Duration::from_millis(50)),
+            }
+        }
+    }
+}
