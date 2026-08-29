@@ -219,6 +219,9 @@ fn wake(cfg: &SomaConfig) -> Result<LoadedMind, String> {
     };
     log::info!("soma: backend {:?}", backend.kind());
 
+    // The anchor's own name goes into the sidecar, so a graph view can call
+    // the hub what it is instead of showing a bare hash.
+    remember(cfg, "soma");
     log::info!("soma: awake — {}", cfg.model.display());
     Ok(LoadedMind { model, tokenizer, backend })
 }
