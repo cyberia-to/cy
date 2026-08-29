@@ -25,7 +25,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 
 use run::backend::Backend;
-use run::generate::{generate, ModelRunner, SampleConfig, SampleKind};
+use run::generate::{ModelRunner, SampleConfig, SampleKind};
 use run::tokenizer::ChatMessage;
 
 /// A particle is the project's canonical hash of the content. Text in,
@@ -54,10 +54,18 @@ pub enum SomaEvent {
     Waking,
     /// The mind is running the question. Sent as generation starts.
     Thinking,
-    /// The answer, with the question it answers.
+    /// A piece of the answer, as it is being written. Concatenating every
+    /// delta gives the raw generation; [`SomaEvent::Answer`] carries the
+    /// cleaned-up whole.
+    Delta(String),
+    /// The answer, with the question it answers and the concepts it touches.
     Answer {
         question: String,
         answer: String,
+        /// Recurring content words of the exchange, most frequent first.
+        /// These are how one exchange weaves into the rest of the graph: the
+        /// same concept in two conversations is the same particle.
+        concepts: Vec<String>,
         tokens: usize,
         tok_per_s: f32,
     },
@@ -164,14 +172,22 @@ fn mind_loop(cfg: SomaConfig, ask_rx: Receiver<String>, event_tx: Sender<SomaEve
 
         let _ = event_tx.send(SomaEvent::Thinking);
         let t0 = std::time::Instant::now();
-        match think(m, &question, &cfg) {
+        let deltas = event_tx.clone();
+        match think(m, &question, &cfg, move |d| {
+            let _ = deltas.send(SomaEvent::Delta(d));
+        }) {
             Ok((answer, tokens)) => {
                 let secs = t0.elapsed().as_secs_f32().max(1e-3);
+                let concepts = concepts_of(&question, &answer);
                 remember(&cfg, &question);
                 remember(&cfg, &answer);
+                for c in &concepts {
+                    remember(&cfg, c);
+                }
                 let _ = event_tx.send(SomaEvent::Answer {
                     question,
                     answer,
+                    concepts,
                     tokens,
                     tok_per_s: tokens as f32 / secs,
                 });
@@ -230,6 +246,7 @@ fn think(
     m: &mut LoadedMind,
     question: &str,
     cfg: &SomaConfig,
+    mut on_delta: impl FnMut(String),
 ) -> Result<(String, usize), String> {
     // The model's own chat template, then an empty think block appended. The
     // qwen3 family spends its whole token budget deliberating inside
@@ -251,17 +268,95 @@ fn think(
         top_k: 40,
     };
 
-    let (raw, tokens) = generate(
-        &mut m.model as &mut dyn ModelRunner,
-        &m.tokenizer,
-        m.backend.as_ref(),
-        &prompt,
-        cfg.max_tokens,
-        sample,
-    )
-    .map_err(|e| format!("generate: {e}"))?;
+    // The decode loop lives here rather than in glia's `generate` because the
+    // point is to see the answer *as it is written*: every new token, the
+    // full sequence is re-decoded and whatever text grew is sent on. Decoding
+    // from the start each step is what keeps multi-byte characters honest —
+    // a token boundary is not a character boundary, and decoding tokens one
+    // at a time tears UTF-8 apart exactly where it matters (any text that is
+    // not English).
+    m.model.reset();
+    let mut ids = m.tokenizer.encode(&prompt);
+    if let Some(bos) = m.tokenizer.bos_token_id {
+        if ids.first() != Some(&bos) {
+            ids.insert(0, bos);
+        }
+    }
+    let mut logits: Vec<f32> = Vec::new();
+    for &t in &ids {
+        logits = m
+            .model
+            .step(t, m.backend.as_ref())
+            .map_err(|e| format!("prefill: {e}"))?;
+    }
 
-    Ok((tidy(&raw), tokens))
+    let mut generated: Vec<u32> = Vec::new();
+    let mut sent = String::new();
+    for _ in 0..cfg.max_tokens {
+        let next = run::generate::sample(&logits, sample);
+        if m.tokenizer.is_eos(next) {
+            break;
+        }
+        generated.push(next);
+        let full = m.tokenizer.decode(&generated, false);
+        if full.len() > sent.len() && full.is_char_boundary(sent.len()) {
+            let delta = full[sent.len()..].to_string();
+            let _ = on_delta(delta);
+            sent = full;
+        }
+        logits = m
+            .model
+            .step(next, m.backend.as_ref())
+            .map_err(|e| format!("decode: {e}"))?;
+    }
+
+    let raw = m.tokenizer.decode(&generated, false);
+    Ok((tidy(&raw), generated.len()))
+}
+
+/// The recurring content words of an exchange, most frequent first — the
+/// hooks by which it hangs onto the rest of the graph.
+///
+/// Deliberately dumb: lowercase words of four letters or more, minus a small
+/// list of function words, ranked by how often the exchange uses them. No
+/// embedding, no model — because the value is not in the extraction being
+/// clever, it is in the extraction being *deterministic*: the same concept in
+/// two exchanges, or two minds, hashes to the same particle, and that
+/// identity is what makes separate conversations grow into one graph.
+pub fn concepts_of(question: &str, answer: &str) -> Vec<String> {
+    const STOP: &[&str] = &[
+        // en
+        "this", "that", "with", "from", "have", "what", "which", "your",
+        "will", "would", "could", "should", "about", "there", "their",
+        "them", "then", "than", "these", "those", "some", "such", "also",
+        "into", "over", "more", "most", "other", "when", "where", "here",
+        "does", "very", "just", "like", "used", "using", "each", "between",
+        "because", "while", "been", "being", "only", "must", "many", "much",
+        "they", "were", "your", "yours", "ours", "it's", "don't", "can't",
+        // ru
+        "этот", "это", "эта", "как", "что", "или", "для", "если", "чтобы",
+        "который", "которая", "может", "быть", "есть", "она", "оно", "они",
+        "его", "её", "их", "нас", "вас", "при", "под", "над", "все", "всё",
+        "так", "тоже", "также", "когда", "где", "почему", "потому",
+    ];
+
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for word in format!("{question} {answer}")
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+    {
+        if word.chars().count() < 4 || STOP.contains(&word) {
+            continue;
+        }
+        match counts.iter_mut().find(|(w, _)| w == word) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((word.to_string(), 1)),
+        }
+    }
+    // Stable: frequency first, then order of first appearance (already the
+    // vec order), so equal counts do not reshuffle between runs.
+    counts.sort_by(|a, b| b.1.cmp(&a.1));
+    counts.into_iter().take(5).map(|(w, _)| w).collect()
 }
 
 /// Strip whatever deliberation leaked into the answer anyway, and trim.
@@ -322,6 +417,16 @@ mod tests {
         assert_eq!(tidy("prefix <think>endless deliberation"), "prefix");
     }
 
+    #[test]
+    fn concepts_are_deterministic_and_ranked() {
+        let a = concepts_of("what is a cybergraph?", "a cybergraph links particles; particles form the cybergraph");
+        let b = concepts_of("what is a cybergraph?", "a cybergraph links particles; particles form the cybergraph");
+        assert_eq!(a, b);
+        assert_eq!(a[0], "cybergraph", "most frequent word ranks first: {a:?}");
+        assert!(a.contains(&"particles".to_string()));
+        assert!(!a.iter().any(|w| w == "what"), "stopwords excluded: {a:?}");
+    }
+
     /// The full loop against the real model: ask, get an answer, see the
     /// events in order. Skipped quietly when no model is installed, because
     /// CI machines do not carry weights.
@@ -342,6 +447,7 @@ mod tests {
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
         let mut saw_waking = false;
+        let mut deltas = String::new();
         loop {
             assert!(
                 std::time::Instant::now() < deadline,
@@ -350,10 +456,15 @@ mod tests {
             match soma.poll() {
                 Some(SomaEvent::Waking) => saw_waking = true,
                 Some(SomaEvent::Thinking) => {}
+                Some(SomaEvent::Delta(d)) => deltas.push_str(&d),
                 Some(SomaEvent::Answer { answer, tokens, .. }) => {
                     assert!(saw_waking, "answered without waking first");
                     assert!(tokens > 0);
                     assert!(!answer.trim().is_empty(), "empty answer");
+                    assert!(
+                        deltas.contains(answer.trim()),
+                        "the streamed text must contain the final answer;\n deltas: {deltas:?}\n answer: {answer:?}"
+                    );
                     break;
                 }
                 Some(SomaEvent::Error(e)) => panic!("soma error: {e}"),
