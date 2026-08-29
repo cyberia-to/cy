@@ -71,6 +71,8 @@ pub enum SomaEvent {
     },
     /// The mind failed. The text says how; the mind stays up for the next ask.
     Error(String),
+    /// The mind will run this model from the next question on.
+    ModelChanged(PathBuf),
 }
 
 /// Where the mind's weights and habits come from.
@@ -87,15 +89,10 @@ pub struct SomaConfig {
 }
 
 impl Default for SomaConfig {
-    /// `SOMA_MODEL` overrides; otherwise the smallest model in `~/llm` that
-    /// answers well enough to be worth linking.
     fn default() -> Self {
         let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-        let model = std::env::var("SOMA_MODEL")
-            .map(PathBuf::from)
-            .unwrap_or_else(|_| PathBuf::from(&home).join("llm/qwen3-0.6b-abl.model"));
         Self {
-            model,
+            model: default_model_path(),
             max_tokens: 512,
             temperature: 0.7,
             particles: Some(PathBuf::from(&home).join("cyb/particles.jsonl")),
@@ -103,9 +100,40 @@ impl Default for SomaConfig {
     }
 }
 
+/// Which model the mind runs, resolved in order of intent: the `SOMA_MODEL`
+/// env var (this run only), then `~/cyb/model` (the choice made in the UI,
+/// device config like identity is), then the smallest model in `~/llm` that
+/// answers well enough to be worth linking.
+pub fn default_model_path() -> PathBuf {
+    if let Ok(p) = std::env::var("SOMA_MODEL") {
+        return PathBuf::from(p);
+    }
+    if let Ok(chosen) = std::fs::read_to_string(chosen_model_file()) {
+        let chosen = chosen.trim();
+        if !chosen.is_empty() {
+            return PathBuf::from(chosen);
+        }
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    PathBuf::from(home).join("llm/qwen3-0.6b-abl.model")
+}
+
+/// Where the UI's model choice persists — one path, one line.
+pub fn chosen_model_file() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    PathBuf::from(home).join("cyb").join("model")
+}
+
+/// What the host can tell the mind.
+enum Directive {
+    Ask(String),
+    /// Put down the current weights and pick these up on the next question.
+    UseModel(PathBuf),
+}
+
 /// A handle to the mind's thread. Cheap to hold, immediate to call.
 pub struct Soma {
-    ask_tx: Sender<String>,
+    ask_tx: Sender<Directive>,
     event_rx: Receiver<SomaEvent>,
 }
 
@@ -114,7 +142,7 @@ impl Soma {
     /// on the first question, so a cyb that is never asked anything never
     /// pays for the weights.
     pub fn spawn(cfg: SomaConfig) -> Self {
-        let (ask_tx, ask_rx) = channel::<String>();
+        let (ask_tx, ask_rx) = channel::<Directive>();
         let (event_tx, event_rx) = channel::<SomaEvent>();
         std::thread::Builder::new()
             .name("soma".into())
@@ -127,7 +155,15 @@ impl Soma {
     /// through [`Soma::poll`]. Questions queue — a second ask while the first
     /// is generating runs after it.
     pub fn ask(&self, question: impl Into<String>) {
-        let _ = self.ask_tx.send(question.into());
+        let _ = self.ask_tx.send(Directive::Ask(question.into()));
+    }
+
+    /// Switch minds. The current weights are dropped, the new ones load
+    /// lazily on the next question — switching costs nothing until it is
+    /// used. Queued like an ask, so a switch after a pending question takes
+    /// effect after that question is answered.
+    pub fn use_model(&self, path: impl Into<PathBuf>) {
+        let _ = self.ask_tx.send(Directive::UseModel(path.into()));
     }
 
     /// The next event, if one has happened. Non-blocking: call it from a
@@ -153,10 +189,19 @@ struct LoadedMind {
     backend: Box<dyn Backend>,
 }
 
-fn mind_loop(cfg: SomaConfig, ask_rx: Receiver<String>, event_tx: Sender<SomaEvent>) {
+fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<SomaEvent>) {
     let mut mind: Option<LoadedMind> = None;
 
-    while let Ok(question) = ask_rx.recv() {
+    while let Ok(directive) = ask_rx.recv() {
+        let question = match directive {
+            Directive::Ask(q) => q,
+            Directive::UseModel(path) => {
+                mind = None;
+                cfg.model = path.clone();
+                let _ = event_tx.send(SomaEvent::ModelChanged(path));
+                continue;
+            }
+        };
         // Wake on first use.
         if mind.is_none() {
             let _ = event_tx.send(SomaEvent::Waking);
@@ -427,6 +472,44 @@ mod tests {
         assert!(!a.iter().any(|w| w == "what"), "stopwords excluded: {a:?}");
     }
 
+    /// Switching models mid-flight: the swap is acknowledged, and the next
+    /// ask wakes the new weights. Skipped without two models on disk.
+    #[test]
+    fn switches_models_between_asks() {
+        let first = SomaConfig::default().model;
+        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+        let second = PathBuf::from(&home).join("llm/qwen2.5-coder-1.5b-q4k.canonical.model");
+        if !first.exists() || !second.exists() {
+            eprintln!("skipping: needs both {first:?} and {second:?}");
+            return;
+        }
+        let soma = Soma::spawn(SomaConfig {
+            max_tokens: 16,
+            temperature: 0.0,
+            particles: None,
+            ..Default::default()
+        });
+        soma.use_model(&second);
+        soma.ask("Reply with exactly one word: ready");
+
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
+        let mut changed_to: Option<PathBuf> = None;
+        loop {
+            assert!(std::time::Instant::now() < deadline, "no answer in three minutes");
+            match soma.poll() {
+                Some(SomaEvent::ModelChanged(p)) => changed_to = Some(p),
+                Some(SomaEvent::Answer { answer, .. }) => {
+                    assert_eq!(changed_to.as_ref(), Some(&second), "answered before acknowledging the switch");
+                    assert!(!answer.trim().is_empty());
+                    break;
+                }
+                Some(SomaEvent::Error(e)) => panic!("soma error: {e}"),
+                Some(_) => {}
+                None => std::thread::sleep(std::time::Duration::from_millis(50)),
+            }
+        }
+    }
+
     /// The full loop against the real model: ask, get an answer, see the
     /// events in order. Skipped quietly when no model is installed, because
     /// CI machines do not carry weights.
@@ -457,6 +540,7 @@ mod tests {
                 Some(SomaEvent::Waking) => saw_waking = true,
                 Some(SomaEvent::Thinking) => {}
                 Some(SomaEvent::Delta(d)) => deltas.push_str(&d),
+                Some(SomaEvent::ModelChanged(_)) => {}
                 Some(SomaEvent::Answer { answer, tokens, .. }) => {
                     assert!(saw_waking, "answered without waking first");
                     assert!(tokens > 0);
