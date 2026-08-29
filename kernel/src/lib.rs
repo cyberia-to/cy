@@ -190,6 +190,21 @@ struct LoadedMind {
 }
 
 fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<SomaEvent>) {
+    // A plain spawned thread defaults to a QoS the scheduler is free to park
+    // on efficiency cores, and everything downstream — kernel launches,
+    // waits, the sampler between them — inherits that. Measured on an
+    // M4 Max: the same model, same backend, same weights ran at 12 tok/s
+    // from a default thread and 60+ from the main one. Thinking is what the
+    // user is waiting for; say so.
+    #[cfg(target_os = "macos")]
+    unsafe {
+        extern "C" {
+            fn pthread_set_qos_class_self_np(qos: u32, rel: i32) -> i32;
+        }
+        const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
+        pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+    }
+
     let mut mind: Option<LoadedMind> = None;
 
     while let Ok(directive) = ask_rx.recv() {
@@ -254,17 +269,17 @@ fn wake(cfg: &SomaConfig) -> Result<LoadedMind, String> {
     let lm = run::LoadedModel::load(&cfg.model).map_err(|e| format!("model load: {e}"))?;
     let tokenizer =
         run::tokenizer::build_tokenizer(&lm).map_err(|e| format!("tokenizer: {e}"))?;
-    let model = run::arch::decoder::LlamaModel::from_loaded(&lm)
+    let mut model = run::arch::decoder::LlamaModel::from_loaded(&lm)
         .map_err(|e| format!("model build: {e}"))?;
 
-    // CPU by default, deliberately. The honeycrisp backend deadlocks when
-    // driven from any thread but the main one — measured here: the same
-    // model that answers in 1.3s from the CLI never returns from a spawned
-    // thread — and soma always runs on its own thread, inside hosts (cyb)
-    // whose main thread already owns a GPU. The reference backend does
-    // ~21 tok/s on the default 0.6B model, which thinking can afford.
-    // `SOMA_BACKEND=honeycrisp|wgpu` overrides for experiments.
-    let choice = std::env::var("SOMA_BACKEND").unwrap_or_else(|_| "cpu".into());
+    // The fastest backend the body has, exactly as the CLI picks it. What
+    // looked like an off-main-thread honeycrisp deadlock — and cost soma
+    // weeks on the CPU backend — was two stacked bugs of ours: the weights
+    // were never uploaded to the backend (the CLI calls `to_backend`, soma
+    // did not), and the resulting per-op fallback spun in an infinite
+    // self-recursion in glia. Both fixed; the thread was never the problem.
+    // `SOMA_BACKEND=cpu|wgpu|honeycrisp` still overrides for experiments.
+    let choice = std::env::var("SOMA_BACKEND").unwrap_or_else(|_| "auto".into());
     let backend: Box<dyn Backend> = match choice.as_str() {
         "cpu" => Box::new(run::backend::cpu::CpuBackend::new()),
         "wgpu" => match run::backend::wgpu::WgpuRsBackend::new() {
@@ -276,8 +291,25 @@ fn wake(cfg: &SomaConfig) -> Result<LoadedMind, String> {
             Ok(b) => Box::new(b),
             Err(_) => Box::new(run::backend::cpu::CpuBackend::new()),
         },
-        _ => Box::new(run::backend::cpu::CpuBackend::new()),
+        _ => {
+            #[cfg(target_os = "macos")]
+            {
+                match run::backend::honeycrisp::HoneycrispBackend::new() {
+                    Ok(b) => Box::new(b) as Box<dyn Backend>,
+                    Err(_) => Box::new(run::backend::cpu::CpuBackend::new()),
+                }
+            }
+            #[cfg(not(target_os = "macos"))]
+            {
+                Box::new(run::backend::cpu::CpuBackend::new())
+            }
+        }
     };
+    // The upload is what makes the fast paths eligible: without it every
+    // fused op sees host tensors and takes the slow road.
+    if let Err(e) = model.to_backend(backend.as_ref()) {
+        return Err(format!("weight upload: {e}"));
+    }
     log::info!("soma: backend {:?}", backend.kind());
 
     // The anchor's own name goes into the sidecar, so a graph view can call
