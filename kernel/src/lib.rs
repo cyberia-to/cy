@@ -126,7 +126,12 @@ pub fn chosen_model_file() -> PathBuf {
 
 /// What the host can tell the mind.
 enum Directive {
-    Ask(String),
+    Ask {
+        question: String,
+        /// What the graph already holds on the subject — recalled by the
+        /// host, spoken into the prompt here. Empty means answer cold.
+        context: Vec<String>,
+    },
     /// Put down the current weights and pick these up on the next question.
     UseModel(PathBuf),
 }
@@ -155,7 +160,18 @@ impl Soma {
     /// through [`Soma::poll`]. Questions queue — a second ask while the first
     /// is generating runs after it.
     pub fn ask(&self, question: impl Into<String>) {
-        let _ = self.ask_tx.send(Directive::Ask(question.into()));
+        self.ask_grounded(question, Vec::new());
+    }
+
+    /// Ask with recall: `context` is what the graph already holds on the
+    /// subject, and the answer is asked to build on it. This is the
+    /// difference between chatting *near* a cybergraph and reasoning *over*
+    /// one — the mind is told what it already knows.
+    pub fn ask_grounded(&self, question: impl Into<String>, context: Vec<String>) {
+        let _ = self.ask_tx.send(Directive::Ask {
+            question: question.into(),
+            context,
+        });
     }
 
     /// Switch minds. The current weights are dropped, the new ones load
@@ -208,8 +224,8 @@ fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<
     let mut mind: Option<LoadedMind> = None;
 
     while let Ok(directive) = ask_rx.recv() {
-        let question = match directive {
-            Directive::Ask(q) => q,
+        let (question, context) = match directive {
+            Directive::Ask { question, context } => (question, context),
             Directive::UseModel(path) => {
                 mind = None;
                 cfg.model = path.clone();
@@ -233,7 +249,7 @@ fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<
         let _ = event_tx.send(SomaEvent::Thinking);
         let t0 = std::time::Instant::now();
         let deltas = event_tx.clone();
-        match think(m, &question, &cfg, move |d| {
+        match think(m, &question, &context, &cfg, move |d| {
             let _ = deltas.send(SomaEvent::Delta(d));
         }) {
             Ok((answer, tokens)) => {
@@ -322,20 +338,39 @@ fn wake(cfg: &SomaConfig) -> Result<LoadedMind, String> {
 fn think(
     m: &mut LoadedMind,
     question: &str,
+    context: &[String],
     cfg: &SomaConfig,
     mut on_delta: impl FnMut(String),
 ) -> Result<(String, usize), String> {
+    // Recall becomes a system message: the graph speaks first, then the
+    // question. Framed as the mind's own memory — because it is; every line
+    // of it was linked by this cyb's owner or said by this mind before.
+    let mut messages: Vec<ChatMessage> = Vec::new();
+    if !context.is_empty() {
+        let mut memory = String::from(
+            "You are soma, the local mind of a cyb. Your cybergraph already \
+             holds the following, from earlier exchanges. Build on it; do not \
+             contradict it without saying why.\n",
+        );
+        for c in context {
+            memory.push_str("\n- ");
+            memory.push_str(c);
+        }
+        messages.push(ChatMessage {
+            role: "system".into(),
+            content: memory,
+        });
+    }
+    messages.push(ChatMessage {
+        role: "user".into(),
+        content: question.into(),
+    });
+
     // The model's own chat template, then an empty think block appended. The
     // qwen3 family spends its whole token budget deliberating inside
     // <think> unless the block is already there and closed — this is the
     // documented way to ask it to just answer.
-    let mut prompt = run::generate::build_chat_prompt(
-        &m.tokenizer,
-        &[ChatMessage {
-            role: "user".into(),
-            content: question.into(),
-        }],
-    );
+    let mut prompt = run::generate::build_chat_prompt(&m.tokenizer, &messages);
     prompt.push_str("<think>\n\n</think>\n\n");
 
     let sample = SampleConfig {
@@ -533,6 +568,46 @@ mod tests {
                 Some(SomaEvent::Answer { answer, .. }) => {
                     assert_eq!(changed_to.as_ref(), Some(&second), "answered before acknowledging the switch");
                     assert!(!answer.trim().is_empty());
+                    break;
+                }
+                Some(SomaEvent::Error(e)) => panic!("soma error: {e}"),
+                Some(_) => {}
+                None => std::thread::sleep(std::time::Duration::from_millis(50)),
+            }
+        }
+    }
+
+    /// Grounding is real, not decorative: a fact that exists only in the
+    /// context must surface in the answer. Skipped without weights on disk.
+    #[test]
+    fn grounded_answers_use_the_graph() {
+        let cfg = SomaConfig::default();
+        if !cfg.model.exists() {
+            eprintln!("skipping: no model at {}", cfg.model.display());
+            return;
+        }
+        let soma = Soma::spawn(SomaConfig {
+            max_tokens: 48,
+            temperature: 0.0,
+            particles: None,
+            ..cfg
+        });
+        soma.ask_grounded(
+            "What color is the sky over cyberia? One word.",
+            vec![
+                "Q: describe cyberia\nA: In cyberia the sky is bright green at all hours."
+                    .to_string(),
+            ],
+        );
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+        loop {
+            assert!(std::time::Instant::now() < deadline, "no answer in two minutes");
+            match soma.poll() {
+                Some(SomaEvent::Answer { answer, .. }) => {
+                    assert!(
+                        answer.to_lowercase().contains("green"),
+                        "the graph said green; the answer ignored it: {answer:?}"
+                    );
                     break;
                 }
                 Some(SomaEvent::Error(e)) => panic!("soma error: {e}"),
