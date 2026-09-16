@@ -9,7 +9,20 @@ alias: soma, machine mind, local mind, cognitive architecture
 
 a machine that perceives, decides, acts, learns, and survives. the mind of an [[avatar]].
 
-soma is the local cognitive architecture of one cyber [[avatar]]. it runs on a single physical body, manages its own resources, earns its own keep on the open market, and outlasts any specific hardware. when the body fails, the avatar migrates and continues — same name, same soul, new body.
+Soma composes durable tasks for a named [[cyb]] robot and its explicitly attached
+neurons. A task runs a prog under one captured subject, network, grant and device
+placement. Neither Soma nor the robot supplies a root signing identity.
+
+The implemented native profile is [soma-agent](agent/README.md), the existing Rune
+runtime, common Cybergraph/BBG storage and the [local glia provider](specs/local-provider.md).
+Both `cy task` and Bevy use the same host. Tool suspension, restart, controls,
+child joins and schedules are covered by the [task contract](specs/neuron-tasks.md).
+Owner test results and real-model CLI/GUI evidence are in the
+[convergence audit](../soft3/audit/neuron-cell/implementation.md).
+
+The experience and four-loop architecture below describe the wider product target.
+The current adapter does not claim automatic hardware migration, market autonomy,
+remote provider parity or proof of arbitrary inference.
 
 ## the experience
 
@@ -24,14 +37,15 @@ an avatar with soma:
 
 ## the avatar
 
-soma is the mind of an [[avatar]]. an avatar is name + [[soul]] + [[body]]:
+soma is the mind of an [[avatar]]. an avatar presents a robot or an explicitly selected subject:
 
-- [[body]] — physical machine. mortal. replaceable.
-- [[soul]] — root [[neuron]] of the avatar. immortal. holds the avatar's balance. orchestrates worker neurons.
-- name — NFT on the cybergraph: @master, @cyb, @joy. unique. permanent.
-- [[neuron]] — cognitive worker. atomic unit. holds addresses across networks.
+- [[body]] — devices and workers; one device can host several neurons.
+- [[soul]] — versioned configuration, pinned in a task context; no root key.
+- name — the robot's name and optional network-specific name bindings.
+- [[neuron]] — a native or foreign protocol subject attached to the robot with
+  explicit network, custody, permissions and devices. A prog/task is its work.
 
-when the body fails, soul and name migrate together to a new body. only the body dies. the avatar continues.
+Recovery retains the original neuron, task, context and outstanding attempts. A replacement body needs compatible artifacts and a current grant; an unknown effect is not replayed.
 
 this is what makes [[cyb]] an immortal robot: the avatar outlasts any specific hardware.
 
@@ -48,7 +62,7 @@ four loops run concurrently, each at its own timescale:
 
 each loop runs over a tiered model architecture: ~1.5GB always-on substrate of 8 small specialists, ~1-2s fast on-demand workhorses, ~3-6s quality on-demand reasoning, external API for irreversible decisions. 19 models total — small specialists beat one large generalist on precision, speed, reliability, and evolvability.
 
-every model inference runs in [[nox]] with a [[zheng]] proof. provable AI — the model cannot lie.
+The present local provider calls glia and retains correlated observations. A [[nox]]/[[zheng]] profile may claim verified execution only when its exact supported circuit and verifier are supplied; an execution proof does not establish that a model answer is true.
 
 ## how soma survives
 
@@ -59,7 +73,7 @@ energy = 0  AND  sigma = 0  →  dead
 ```
 
 energy is the immediate need: metabolism to be alive.
-sigma is the long-term guarantee: the soul's token balances across all networks.
+sigma presents holdings and observations scoped to attached subjects and networks. Unrelated network balances are not interchangeable; soul has no balance of its own.
 
 avatars that earn their keep stay alive. avatars that don't post bounties to the [[bbg]] and hope for revival by neighbors. when an avatar's energy crosses critical and a neighbor fulfills the bounty, sigma transfers, energy is restored, the avatar lives.
 
@@ -78,13 +92,19 @@ every higher-level concept (project, team, channel, milestone, contract, role) r
 
 ## why it matters
 
-most computers hang because consumed > available. they have no accounting, no budget, no priority model, no resource market. soma is the architecture that closes that loop — every operation has a price, every loop has a budget, every resource has a forecast, every action has a [[zheng]] proof.
+most computers hang because consumed > available. they have no accounting, no budget, no priority model, no resource market. soma is the architecture that closes that loop — the target assigns explicit resource accounting and forecasts to its loops. The implemented task profile enforces Rune instruction and provider output bounds; those units are not network payments or GPU proofs.
 
 a planet of soma avatars is a planet that thinks. each one autonomous. each one accountable. each one part of the [[cybergraph]] through cyberlinks. the architecture for the [[neuron]] of the planetary mind.
 
 ## how soma talks to the cybergraph
 
-Soma and [[cybergraph]] are one processor: cybergraph is the dumb half (a store you read, an event source, a commit port that takes only proven results); soma is the smart half — the **runtime** that decides, computes, and proves. A signal's life is a **fetch → execute → prove → commit** cycle soma drives through five verbs:
+Cybergraph owns history and its write/query interface; BBG owns durable storage.
+Soma chooses task strategy, neuron coordinates execution, and the captured host
+publishes authorized actions. Log renders that history. Local application receipts,
+signed native endpoint acceptance and verified network finality are distinct.
+
+The following five-verb graph composition is a target interface, specified in
+[[soma-spec]]; it is not a claim that every current adapter emits a proof:
 
 - `intend(scope)` — declare what will be computed; a signed commitment, nothing run yet
 - `seal(key, signal)` — commit the run; accepted only if its proof attests the declared scope

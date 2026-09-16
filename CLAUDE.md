@@ -10,11 +10,19 @@ Each soma instance runs on one Body (physical machine), manages its own resource
 
 ## Core concepts
 
-- **Avatar** = Name (NFT) + Soul (root Neuron) + Body (current machine)
-- **Body** = mortal physical vessel; dialect with resource budget
-- **Soul** = root Neuron; holds sigma; orchestrates worker Neurons; immortal
-- **Neuron** = cognitive worker; has many Addresses; executes Tasks; holds Skills
-- **Sigma** = sum of token balances across all networks; migrates with Soul
+The accepted cyb foundation ([architecture](../cyb/specs/architecture.md),
+[neuron](../cyb/specs/neuron.md)) takes precedence over older Soma drafts.
+
+- **Robot** = named product with explicit neuron attachments; no root signer.
+- **Avatar** = a presentation of the robot or a specified subject.
+- **Body** = devices, workers and resources; one body can host many neurons and
+  one neuron can use several devices. Placement creates no identity.
+- **Soul** = versioned configuration, pinned for admitted work; not a neuron.
+- **Neuron** = native/foreign domain-qualified subject and its authorized progs.
+  Native key IDs and existing foreign addresses do not change in this migration.
+- **Task** = Soma work bound to a prog/invocation, context and budget; no task key.
+- **Sigma** = scoped holdings and observations across selected attachments;
+  unrelated network balances are not interchangeable or implicit finality.
 
 ## The four loops
 
@@ -47,15 +55,17 @@ Everything reduces to configurations of these five + typed cyberlinks.
 - **Tier 2** (<6s load): qwen3.5-9b + qwen2.5-coder-14b + mimo-7b + deepseek-r1-8b + qwen2.5-vl-7b
 - **Tier 3** (external): Anthropic API + Perplexity (irreversible decisions only, <5%)
 
-All inference runs in nox with a zheng proof. Provable AI.
+The tier list is a target inventory. The current kernel calls glia's local model
+runner. A proof is claimed only for a pinned, implemented and verified profile;
+ordinary local inference does not become proven by changing the actor name.
 
 ## Key dependencies
 
-- **bbg** — append-only memory substrate; polynomial commitment; no locks
-- **nox** — provable VM; every inference gets a zheng proof
+- **bbg** — common transactional persistence and authenticated state; local writers share its coordinator
+- **nox** — VM/provable execution profiles where supported
 - **cybergraph** — coordination graph; particle + cyberlink storage
 - **tri-kernel** — D (diffusion) + S (springs) + H (heat) tri-kernel recomputation
-- **zheng** — proof system (~5μs verify)
+- **zheng** — proof system; performance and support come from owner evidence
 
 ## Files
 
@@ -84,5 +94,11 @@ soma-kernel      orchestration, scheduling, RBAC
 
 ## Status
 
-Phase 0 — specification complete (soma.md + soma-spec.md).
-Phase 1 — not started. First move: soma-kernel + soma-runtime scaffolding.
+The local cognition kernel and Bevy bridge exist in `kernel/` and `cyb/shell`.
+Soma persists task/context/operation observations through neuron progs and Rune.
+The shared cyb Host connects both cy task and Bevy; the host owns publication
+under a captured attachment. Durable task/worker composition is tracked by P09 in
+[neuron-cell convergence](../soft3/roadmap/neuron-cell-convergence.md).
+Implementation evidence belongs in audit; older research/provider lists are not
+release capability claims. New task schemas must use neuron/prog/invocation
+identity and preserve context, grant, budget, schedule and parent-child recovery.

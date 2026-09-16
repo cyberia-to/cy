@@ -1,14 +1,14 @@
 # soma specification
 
-Complete technical specification of soma — the cognitive architecture of one cyber Avatar. This document is for the architect and the implementer; for the product overview, see [[soma]].
+Product specification of Soma, with an accepted neuron identity layer and a wider staged cognitive architecture. This document is for the architect and the implementer; for the product overview, see [[soma]].
 
-soma is the local mind of one Avatar. It manages a single Body's finite resources, organizes the Avatar's work through a small grammar of primitives, runs cognition over a tiered model architecture, earns its keep on the open market, and outlasts any specific Body through the immortality of the Avatar's Name + Soul.
+Soma organizes work for a named robot and its attached neurons. The product target includes resource management, cognition, markets and recovery; implemented claims are restricted to the explicit task/provider profiles and owner audit evidence.
 
 The specification has nine layers:
 
 ```
 1. Identity      what soma IS              Body, Neuron, Soul, Avatar
-2. Resources     what soma HAS             Body budget + Soul sigma
+2. Resources     what soma HAS             Body budget + scoped sigma
 3. Survival      how soma STAYS ALIVE      energy + sigma, bounty, allostasis
 4. Perception    how soma SEES             always-on sensors and models
 5. Cognition     how soma THINKS           four loops on tiered models
@@ -22,142 +22,92 @@ Each layer rests on the ones above. Read top to bottom.
 
 ---
 
-# 1. Identity — what soma is
+# 1. Identity — what Soma is
 
-Four concepts form the architecture's identity layer. Every multi-agent architecture surveyed conflates these and pays for it in fragility — pretending agents are disembodied software with infinite resources and no continuity across hardware failure. Cyber refuses this fiction.
+This layer follows [cyb architecture](../cyb/specs/architecture.md) and
+[neuron](../cyb/specs/neuron.md). It supersedes the old root-Soul and cognitive
+worker identity ladder. The remaining product inventory is a target, with current
+execution and adapter profiles defined in [neuron-tasks](specs/neuron-tasks.md)
+and [local-provider](specs/local-provider.md).
 
-| concept | nature | lifecycle |
+| Concept | Role | Lifecycle |
 |---|---|---|
-| Body | physical vessel; dialect with properties | mortal; replaceable |
-| Neuron | cognitive agent; has Addresses | task-scoped or persistent |
-| Soul | root Neuron; holds balance; orchestrates | immortal; part of Avatar |
-| Avatar | Name + Soul + Body | immortal (Name + Soul persist; Body replaced) |
+| Robot | Named product and explicit neuron attachment registry | Configuration survives device/process changes |
+| Neuron | Native/foreign domain-qualified protocol subject | Exists without a loaded program or process |
+| Prog / invocation | Installed executable data and its work | Upgrade, suspend, resume, cancel and archive without another key |
+| Soul | Versioned priorities, goals and configuration | Revision pinned at admission; explicit adoption |
+| Body | Devices, workers and available resources | Replaceable placement; no ownership implied by hosting |
+| Avatar | Presentation of robot or selected subject | Does not authorize actions |
 
-## Body — the physical vessel
+## Body — devices and resource placement
 
-A dialect with physical properties. One Body = one physical machine. Non-fungible, non-transferable. A laptop is one Body. A phone is another. A server is another.
+A laptop, phone, server or cluster exposes workers and capacities. One body can
+host work for several neurons; one neuron may authorize compatible workers on
+several devices. The local adapter initially permits one fenced writer for a
+runtime subject. The topology is not a promise of remote writer consensus.
 
-Body is mortal and replaceable. When a Body fails, the Avatar that inhabited it finds a new Body and continues.
+Body resources include energy income/storage, CPU/GPU compute, RAM, durable
+storage and bandwidth. Classes (personal/shared/edge/server/cluster), status
+(online/degraded/offline/maintenance), location and jurisdiction are placement
+metadata. Actual capability, compatible warrior/ABI and current grant must be
+checked before handing work to a worker; metadata does not prove hardware.
 
-```yaml
-Body<class>:
-  Personal     one human owns (my laptop)
-  Shared       multiple humans share (cyber valley node)
-  Edge         sensor with minimal compute
-  Server       high-resource node
-  Cluster      aggregated Bodies
+## Neuron — the protocol subject
 
-Body<budget>:
-  energy_kWh_per_day   energy income rate (solar, grid)
-  energy_storage_kWh   battery capacity
-  compute_flops        CPU/GPU capacity
-  ram_GB               rapid memory
-  storage_GB           persistent storage
-  bandwidth_Mbps       network throughput
+Native NeuronId remains H(the existing compressed public key). A foreign subject
+retains its native domain and address representation, with an explicit target
+network. Robot may attach different keys, networks, devices and watch-only
+accounts. Do not combine independent foreign addresses into a synthetic native
+signer, or create a neuron merely to run another task.
 
-Body<status>:    Online | Degraded | Offline | Maintenance | Dead
-Body<location>:  geo | network | jurisdiction
-```
+An attachment binds subject, network, custody reference, policy, revision,
+control/watch access and allowed devices. The robot has no master signing key.
+Actual key material belongs to vault. A selected subject is a convenience for
+new input; pending work retains its original captured subject and grant.
 
-## Neuron — the cognitive agent
+Neuron executes installed progs, emits authorized cyberlinks and may commit to
+goals/contracts. Its tasks, skills, memory sources and trust relations are graph
+data. Guest execution on another body needs the exact worker and payment profile;
+a body owner does not inherit the neuron's signing authority.
 
-The atomic cognitive unit. Not defined by its address — a Neuron has multiple Addresses, across different networks and within one network. Neuron ≠ Address. Addresses are projections of the Neuron into specific networks; the Neuron is the thing that holds them.
+## Soul — versioned configuration
 
-```yaml
-Neuron:
-  addresses:       [Address]       many per network; many across networks
-  skills:          has_skill cyberlinks to Skill particles
-  goals:           subscribes_to cyberlinks to Goal particles
-  personality:     priority weights, ethics rules, preferences
-  memory_roots:    cyberlink history anchors
-  trust:           cyberlinks to other Neurons
-  loops:           which Skill<Composite> patterns this Neuron runs
-  contracts:       bilateral commitments to other Neurons
-```
+Soul records priorities, preferences, memory scopes and strategy. It neither
+holds balances nor creates subordinate identities. Soma interprets its pinned
+revision to choose work; ward admits authority and resource bounds under the
+selected neuron. A learning result proposes a new revision with provenance and
+checks. Adoption is an explicit authorized change, not automatic self-permission.
 
-Neurons are workers. They execute Tasks, emit cyberlinks, and run Skills. A Neuron can work on a foreign Avatar as a guest — acting, sending cyberlinks, executing remote Tasks — but resources consumed there are billed to that Avatar; trust is extended by that Avatar's policies.
+## Robot and Avatar
 
-## Soul — the root Neuron
+A robot has a name, neuron attachments, configuration and device placements.
+Optional network name/NFT bindings retain their own protocol semantics. Avatar
+presents this robot or a specified subject. Addressing a robot name must resolve
+an explicit destination; it is not an implicit root-neuron dispatch.
 
-Soul is not a separate concept. Soul is a Neuron with root status on an Avatar. Same type, special position.
+A robot may use a laptop and phone concurrently through separate attachments or
+compatible fenced placements. Device loss does not require a new subject:
 
-The Soul holds the Avatar's balance (sigma — the sum of token balances across networks) and orchestrates all other Neurons running on the Avatar. When coordination addresses `@master` — that is @master's Soul. The Soul is wherever the Avatar currently is embodied.
+1. Read durable task/prog/context and operation history from Cybergraph/BBG.
+2. Acquire a current grant and compatible replacement worker generation.
+3. Resume its supported checkpoint; preserve original budget and lineage.
+4. Retain an unknown external effect until authenticated reconciliation; do not
+   repeat it because a heartbeat stopped or a body disappeared.
 
-Soul is immortal because it is part of Avatar — and Avatar (Name + Soul) persists across Body changes.
+Remote recovery, transport and verified execution require their implemented
+profiles and available artifacts. The native local profile demonstrates store
+restart and worker fencing, not automatic planetary migration.
 
-## Avatar — Name + Soul + Body
-
-```
-Avatar = Name (NFT) + Soul (root Neuron) + Body (current vessel)
-```
-
-Three components, three roles:
-
-- Name: the identity anchor. Non-fungible token. `@master`, `@cyb`, `@joy`. Unique across the network. Persists forever.
-- Soul: the cognitive continuity. Root Neuron. Holds balance, orchestrates, runs loops. Persists forever.
-- Body: the physical vessel. Current embodiment. Mortal. Replaceable.
-
-Avatar is immortal because Name and Soul persist. Only Body is mortal.
-
-```yaml
-Avatar:
-  name:     NFT; canonical identity handle (@master, @cyb, @joy)
-  soul:     root Neuron; holds balance; orchestrates other Neurons
-  body:     current physical vessel; replaceable
-```
-
-One Avatar = one Body at a time. One Avatar = one Soul. One Avatar = one Name.
-
-If a human has a laptop, a phone, and a server — that is three Bodies available. One Avatar (Name + Soul) inhabits one Body at a time. The other Bodies wait.
-
-## The immortality mechanism
-
-When a Body fails, the Avatar migrates:
-
-```
-Body A fails:
-  Soul checkpoints state → particle in cybergraph
-  Avatar (Name + Soul) seeks new Body
-  Body B becomes Avatar's vessel
-  Soul instantiates on Body B
-  Avatar continues: same Name, same Soul, new Body
-  Identity preserved across body change
-```
-
-This is what makes [[cyb]] an immortal robot. Bodies fail; Avatars persist. Continuity of identity is decoupled from continuity of any specific hardware.
-
-## Cyberlinks involving the four concepts
-
-```
-Avatar → Body        inhabits         current physical vessel
-Avatar → Avatar      peers_with       network neighborhood
-Avatar → Avatar      rents_from       resource market edge
-Soul   → Neuron      spawns           Soul created this worker Neuron
-Soul   → Neuron      orchestrates     Soul directs this Neuron
-Neuron → Neuron      trusts           identity-level trust relation
-Neuron → Skill       has_skill        carries this capability
-Neuron → Goal        subscribes_to    commits to this Goal
-Task   → Body        runs_on          where execution happened
-Task   → Body        consumed         resources used
-Skill  → Body        requires         hardware spec needed
-```
-
-## Strict rules
-
-- One Avatar = one Body at a time.
-- One Avatar = one Soul (the root Neuron).
-- One Avatar = one Name.
-- One Avatar hosts many Neurons; Soul orchestrates them all.
-- A Soul is the root Neuron of exactly one Avatar at a time.
-- A Neuron can have many Addresses; it is not reducible to any of them.
-
-Higher-order structures — group identities spanning multiple Avatars, organizational Souls, persona sub-Neurons — are deferred to a separate ontology layer built on top through cyberlinks between Souls.
+Relationships are robot→attachment, neuron→prog/task, task→context/goal and
+invocation→worker placement. These are configuration/data relations. A second
+subject is justified by a real distinct key, network identity or authority need,
+never by program subdivision, persona specialization or a child task.
 
 ---
 
 # 2. Resources — what soma has
 
-Two axes: Body budget (physical capacity) and Soul sigma (economic capital). Both are required to be alive; neither can be substituted for the other.
+Two axes: Body budget (physical capacity) and scoped sigma (economic observations). Both are required to be alive; neither can be substituted for the other.
 
 ## Body budget — four physical resources
 
@@ -172,9 +122,9 @@ Each carries a distinct meaning for the Avatar:
 
 Remove any one and the being degrades. The Body has finite quantities of each, replenished at finite rates from finite sources (battery + solar/grid, network link, storage hardware, CPU/GPU silicon).
 
-## Soul sigma — economic capital
+## Sigma — scoped economic capital
 
-Sigma is the sum of token balances the Soul holds across all networks (Bostrom, Ethereum, Cosmos, etc.). It is not a Body property — it lives in the cybergraph on the Soul's identity. Sigma migrates with the Soul when the Body changes.
+Sigma presents balances and receipts for explicit subject/network/token scopes. Unrelated units and networks cannot be summed into spendable authority; valuation is a separate labelled observation. Funds belong to protocol accounts, not Soul or Body. Replacing a device preserves account identity but requires current custody and authority before spending.
 
 Sigma buys everything the Body cannot produce locally:
 - charge bounty (energy when battery empty and no solar)
@@ -209,7 +159,7 @@ Every computer hangs because consumed resources exceed available resources. Root
 |---|---|---|
 | unbounded consumption | program eats resources without limit | budget — every Order finite |
 | no accounting | resources consumed without price | φ*-derived pricing per operation |
-| shared mutable state | two processes fight over same memory | append-only [[bbg]], no locks |
+| shared mutable state | competing writes | common BBG transactions, expected-head CAS, current-grant coordination and fenced workers |
 | state corruption | bit flipped, nobody noticed | provable memory — polynomial commitment catches it |
 | priority inversion | cheap process blocks expensive one | focus-weighted scheduling |
 
@@ -481,7 +431,7 @@ Loop<resource_hints>:
   priority_class:           survival | work | learning | idle
 ```
 
-The Soul grants budget per loop based on the Body's current state. Low energy throttles low-priority loops. Contended GPU goes to the highest-priority Skill. Survival loops (homeostasis) never throttle until literal death of the Body.
+Soma proposes per-loop budgets from the pinned Soul revision and current Body observations; neuron admission and ward enforce the actual grant. Low energy throttles low-priority loops. Contended GPU goes to the highest-priority Skill. Survival loops (homeostasis) never throttle until literal death of the Body.
 
 ## Model tiers
 
@@ -644,7 +594,7 @@ Goal<kind, orientation, horizon>
 | Vision | decades |
 | Purpose | existential |
 
-Within one Avatar, the Goal graph is the Avatar's agenda. Higher Goals decompose into lower Goals; Soul allocates Neurons and budget across them; Tasks serve the leaves. The Goal graph determines what the Avatar is trying to achieve, at what horizon, in what order. Soul subscribes to the top-level Goals; worker Neurons are spawned to pursue sub-Goals beneath them.
+The robot's goal graph is its agenda. Soma uses the pinned Soul revision to allocate tasks and budgets under explicitly attached neurons. Sub-goals produce progs/invocations with durable parent-child lineage, budget transfer and join policy; they do not automatically create worker identities. A separate neuron is selected only when the work actually needs different authority.
 
 Across Avatars, shared Goal subscriptions form Teams: the set of Avatars subscribed to the same Goal. No separate Team or Org primitive — those emerge from the cross-Avatar projection of Goal graphs. An Org is the root Goal of that projection.
 
@@ -679,7 +629,7 @@ Tasks can have sub-Tasks via `parent_task` cyberlinks. A Task with sub-Tasks is 
 
 ### Order — Task in flight on nox
 
-An Order is a Task<kind=Work> in execution: a [[nox]] formula running in the [[zheng]]-proven trace. Order ⊂ Task. Every Task<kind=Work> that runs on a Body becomes an Order when nox accepts it for execution.
+In the planned nox market profile, an Order is Task<kind=Work> admitted to an explicitly supported nox/zheng execution profile. It is work under a neuron, not another subject. The implemented Rune/glia local task profile must not be labelled a proven nox Order.
 
 Orders are the unit of:
 - nox metering (every step priced)
@@ -1010,7 +960,7 @@ All are graph walks bounded by neighborhood size. bbg's bounded-locality guarant
 Coordination on a graph produces patterns that hierarchical assignment cannot:
 
 1. Self-organization — nobody assigns Tasks. A Goal appears, a Sensor watches, a Task is generated, eligible Neurons see it, claim, execute.
-2. Resilience — if a Neuron drops, its `assigned_to` Tasks revert to `seeking_assignee` via a heartbeat Sensor. The graph heals itself.
+2. Resilience — a missing worker may trigger recovery, but existing task ownership, reservations and unknown effects remain. Reassignment requires a fenced grant and an explicit recovery protocol; a missing heartbeat cannot authorize repeating an effect.
 3. Load balancing — capacity-aware claiming distributes work without a coordinator.
 4. Skill specialization — Neurons that frequently claim Tasks of a certain type accumulate karma on the corresponding Skill. φ* surfaces them first when similar Tasks appear.
 5. Priority emergence — there is no central priority queue. Each Task competes for attention through its stake and through cyberlinks from high-horizon Goals.
@@ -1125,7 +1075,7 @@ procedural memory tool definitions, static
 | Semantic | forever | cybergraph particles | typed query |
 | Procedural | forever | Skill particles (agentskills.io format) | composition |
 
-Soul's `memory_roots` are the cyberlink anchors into the semantic memory subgraph that this Avatar uses as its personal context. When the Avatar migrates to a new Body, memory_roots travel with the Soul — the new Body has no memory until the Soul re-attaches and warms the working memory back up from episodic and semantic stores.
+Soul may configure memory roots, while every admitted task pins actual source scope, observed head, content and disclosure. A replacement body reconstructs working context from those durable observations under its current grant. Warm caches and generated JSONL exports are not authoritative history.
 
 ---
 
@@ -1303,6 +1253,6 @@ Total additional: ~1.9B params, ~1GB RAM. Fits within existing budget if loaded 
 - Training pipeline: how do models update from reward signal in nox?
 - Plasticity gating: when to learn aggressively vs consolidate?
 - Interaction between soma instances across network (collective soma)
-- Persona sub-Neurons: when does a Neuron specialize enough to merit its own identity?
+- Persona specialization: use configuration/progs under the same subject; require a concrete distinct signing authority before attaching another neuron.
 
 See [[soma]] for product overview. See [[machine mind]] for high-level architecture. See [[neuroscience principles for machine mind]] for the ten principles. See [[energy market]] for metabolism. See [[nox]] for the VM. See [[bbg]] for memory tiers.
