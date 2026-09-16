@@ -2,7 +2,6 @@ fn main() {
     let soma = soma_kernel::Soma::spawn(soma_kernel::SomaConfig {
         max_tokens: 200,
         temperature: 0.7,
-        particles: None,
         ..Default::default()
     });
     soma.ask("What is a knowledge graph? Two sentences.");

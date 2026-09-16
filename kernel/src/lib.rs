@@ -11,16 +11,16 @@
 //! - soma decides *what* to think about; glia runs the thinking. No tensor,
 //!   dtype or backend name crosses into this crate's API.
 //! - soma produces particles and the *text* behind them; committing links is
-//!   the cell's job (the caller's), because the cell owns the neuron identity
-//!   and the signal chain. soma has no keys.
+//!   the host's job through its shared graph and explicitly selected neuron.
+//!   This computation kernel has no keys or independent persistence writer.
 //!
 //! The mind runs on its own thread. Model loading takes a second and
 //! generation takes a few more, and the caller is typically a UI frame loop
 //! that cannot wait for either. [`Soma::ask`] returns immediately;
 //! [`Soma::poll`] hands back [`SomaEvent`]s as they happen.
 
-use std::fs::OpenOptions;
-use std::io::Write as _;
+pub mod agent;
+
 use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender, TryRecvError};
 
@@ -83,19 +83,14 @@ pub struct SomaConfig {
     /// Longest answer soma will produce, in tokens.
     pub max_tokens: usize,
     pub temperature: f32,
-    /// Sidecar file mapping particle → the text it hashes. The graph stores
-    /// hashes; whoever renders it will want the words back.
-    pub particles: Option<PathBuf>,
 }
 
 impl Default for SomaConfig {
     fn default() -> Self {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
         Self {
             model: default_model_path(),
             max_tokens: 512,
             temperature: 0.7,
-            particles: Some(PathBuf::from(&home).join("cyb/particles.jsonl")),
         }
     }
 }
@@ -205,13 +200,7 @@ struct LoadedMind {
     backend: Box<dyn Backend>,
 }
 
-fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<SomaEvent>) {
-    // A plain spawned thread defaults to a QoS the scheduler is free to park
-    // on efficiency cores, and everything downstream — kernel launches,
-    // waits, the sampler between them — inherits that. Measured on an
-    // M4 Max: the same model, same backend, same weights ran at 12 tok/s
-    // from a default thread and 60+ from the main one. Thinking is what the
-    // user is waiting for; say so.
+fn interactive_thread() {
     #[cfg(target_os = "macos")]
     unsafe {
         extern "C" {
@@ -220,6 +209,16 @@ fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<
         const QOS_CLASS_USER_INTERACTIVE: u32 = 0x21;
         pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
     }
+}
+
+fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<SomaEvent>) {
+    // A plain spawned thread defaults to a QoS the scheduler is free to park
+    // on efficiency cores, and everything downstream — kernel launches,
+    // waits, the sampler between them — inherits that. Measured on an
+    // M4 Max: the same model, same backend, same weights ran at 12 tok/s
+    // from a default thread and 60+ from the main one. Thinking is what the
+    // user is waiting for; say so.
+    interactive_thread();
 
     let mut mind: Option<LoadedMind> = None;
 
@@ -255,11 +254,6 @@ fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<
             Ok((answer, tokens)) => {
                 let secs = t0.elapsed().as_secs_f32().max(1e-3);
                 let concepts = concepts_of(&question, &answer);
-                remember(&cfg, &question);
-                remember(&cfg, &answer);
-                for c in &concepts {
-                    remember(&cfg, c);
-                }
                 let _ = event_tx.send(SomaEvent::Answer {
                     question,
                     answer,
@@ -328,9 +322,6 @@ fn wake(cfg: &SomaConfig) -> Result<LoadedMind, String> {
     }
     log::info!("soma: backend {:?}", backend.kind());
 
-    // The anchor's own name goes into the sidecar, so a graph view can call
-    // the hub what it is instead of showing a bare hash.
-    remember(cfg, "soma");
     log::info!("soma: awake — {}", cfg.model.display());
     Ok(LoadedMind { model, tokenizer, backend })
 }
@@ -340,7 +331,7 @@ fn think(
     question: &str,
     context: &[String],
     cfg: &SomaConfig,
-    mut on_delta: impl FnMut(String),
+    on_delta: impl FnMut(String),
 ) -> Result<(String, usize), String> {
     // Recall becomes a system message: the graph speaks first, then the
     // question. Framed as the mind's own memory — because it is; every line
@@ -366,11 +357,20 @@ fn think(
         content: question.into(),
     });
 
+    generate_messages(m, &messages, cfg, on_delta,
+        std::time::Instant::now() + std::time::Duration::from_secs(120), 8192)
+}
+
+fn generate_messages(
+    m: &mut LoadedMind, messages: &[ChatMessage], cfg: &SomaConfig,
+    mut on_delta: impl FnMut(String), deadline: std::time::Instant,
+    max_prompt_tokens: usize,
+) -> Result<(String, usize), String> {
     // The model's own chat template, then an empty think block appended. The
     // qwen3 family spends its whole token budget deliberating inside
     // <think> unless the block is already there and closed — this is the
     // documented way to ask it to just answer.
-    let mut prompt = run::generate::build_chat_prompt(&m.tokenizer, &messages);
+    let mut prompt = run::generate::build_chat_prompt(&m.tokenizer, messages);
     prompt.push_str("<think>\n\n</think>\n\n");
 
     let sample = SampleConfig {
@@ -394,8 +394,10 @@ fn think(
             ids.insert(0, bos);
         }
     }
+    if ids.len() > max_prompt_tokens { return Err("model prompt token limit".into()); }
     let mut logits: Vec<f32> = Vec::new();
     for &t in &ids {
+        if std::time::Instant::now() >= deadline { return Err("model prefill deadline".into()); }
         logits = m
             .model
             .step(t, m.backend.as_ref())
@@ -405,12 +407,14 @@ fn think(
     let mut generated: Vec<u32> = Vec::new();
     let mut sent = String::new();
     for _ in 0..cfg.max_tokens {
+        if std::time::Instant::now() >= deadline { return Err("model decode deadline".into()); }
         let next = run::generate::sample(&logits, sample);
         if m.tokenizer.is_eos(next) {
             break;
         }
         generated.push(next);
         let full = m.tokenizer.decode(&generated, false);
+        if full.len() > soma_agent::MAX_TEXT { return Err("model text result limit".into()); }
         if full.len() > sent.len() && full.is_char_boundary(sent.len()) {
             let delta = full[sent.len()..].to_string();
             let _ = on_delta(delta);
@@ -490,26 +494,6 @@ fn tidy(raw: &str) -> String {
     s.trim().to_string()
 }
 
-/// Append `(particle, text)` to the sidecar, so the hashes in the graph can be
-/// turned back into words. Append-only and line-oriented for the same reason
-/// the cell's log is: it survives anything short of losing the disk.
-fn remember(cfg: &SomaConfig, text: &str) {
-    let Some(path) = &cfg.particles else { return };
-    if let Some(dir) = path.parent() {
-        let _ = std::fs::create_dir_all(dir);
-    }
-    let hex: String = particle_of(text).iter().map(|b| format!("{b:02x}")).collect();
-    // Hand-rolled JSON with the one escape pass it needs — a dependency for
-    // one line would be the heavier tool.
-    let escaped = text
-        .replace('\\', "\\\\")
-        .replace('"', "\\\"")
-        .replace('\n', "\\n");
-    if let Ok(mut f) = OpenOptions::new().create(true).append(true).open(path) {
-        let _ = writeln!(f, "{{\"particle\":\"{hex}\",\"text\":\"{escaped}\"}}");
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -553,7 +537,6 @@ mod tests {
         let soma = Soma::spawn(SomaConfig {
             max_tokens: 16,
             temperature: 0.0,
-            particles: None,
             ..Default::default()
         });
         soma.use_model(&second);
@@ -589,7 +572,6 @@ mod tests {
         let soma = Soma::spawn(SomaConfig {
             max_tokens: 48,
             temperature: 0.0,
-            particles: None,
             ..cfg
         });
         soma.ask_grounded(
@@ -630,7 +612,6 @@ mod tests {
         let soma = Soma::spawn(SomaConfig {
             max_tokens: 64,
             temperature: 0.0,
-            particles: None,
             ..cfg
         });
         soma.ask("Reply with exactly one word: ready");

@@ -5,7 +5,6 @@ fn main() {
         model: path.into(),
         max_tokens: 12,
         temperature: 0.0,
-        particles: None,
     });
     soma.ask("Say ready.");
     let t0 = std::time::Instant::now();

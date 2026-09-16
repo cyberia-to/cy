@@ -15,6 +15,24 @@ run    = { path = "../../glia/run" }
 # the project's canonical hash — a particle IS hemera::hash(content).
 hemera = { package = "cyber-hemera", version = "0.3", path = "../../hemera/rs" }
 log    = "0.4"
+soma-agent = { path = "../agent" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
 
 [dev-dependencies]
 env_logger = "0.11"
+cyb-core = { path = "../../cyb/core" }
+tempfile = "3"
+
+# Weight-file verification must remain practical in the local development host.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[features]
+model-integration = []
+
+[[test]]
+name = "durable_provider"
+path = "tests/durable_provider.rs"
+required-features = ["model-integration"]

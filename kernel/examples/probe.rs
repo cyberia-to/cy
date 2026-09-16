@@ -4,7 +4,6 @@ fn main() {
     let soma = soma_kernel::Soma::spawn(soma_kernel::SomaConfig {
         max_tokens: 32,
         temperature: 0.0,
-        particles: None,
         ..Default::default()
     });
     soma.ask("Reply with exactly one word: ready");
