@@ -11,7 +11,7 @@ the contract between [[seer]], [[tru]], the [[cybergraph]], and the [[neuron]] t
 
 ## scope
 
-seer mines existing→existing, on any chain. a chain here is a home book ([[cyber/research/oikos|oikos]]) whose settlement pays for proven focus shift under the [[tru]] measure; $CYB's is the reference and this page reads its rules from [[rewards]], but nothing below is specific to it — a neuron mining its own book substitutes that book's streams. seer proposes edges between [[files]] that are already in the graph and never creates a file. the value of every candidate is computable before commitment from public state ([[rewards]] §6); the value of a new file is not — it exists only once the file is wired in. that asymmetry is the boundary, and it is why a content-blind miner can be exact at its job. see [docs/link-production.md](../docs/link-production.md).
+seer mines existing→existing, on any chain. a chain here is a home book ([[oikos|oikos]]) whose settlement pays for proven focus shift under the [[tru]] measure; $CYB's is the reference and this page reads its rules from [[rewards]], but nothing below is specific to it — a neuron mining its own book substitutes that book's streams. seer proposes edges between [[files]] that are already in the graph and never creates a file. the value of every candidate is computable before commitment from public state ([[rewards]] §6); the value of a new file is not — it exists only once the file is wired in. that asymmetry is the boundary, and it is why a content-blind miner can be exact at its job. see [docs/link-production.md](../docs/link-production.md).
 
 ## inputs
 

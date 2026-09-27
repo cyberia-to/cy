@@ -44,7 +44,7 @@ seer mines the mint. a different miner grinds nonces for the subsidy. two miners
 
 ## on any chain
 
-the price is tru's, not $CYB's. any home book that settles in proven focus shift can be mined the same way. and there are many books: [[cyber/research/oikos|oikos]] gives every token its own — one token, one chain — and any neuron with a token can root one. $CYB is the reference, not the only chain. seer mines whichever chain the neuron is signing into.
+the price is tru's, not $CYB's. any home book that settles in proven focus shift can be mined the same way. and there are many books: [[oikos|oikos]] gives every token its own — one token, one chain — and any neuron with a token can root one. $CYB is the reference, not the only chain. seer mines whichever chain the neuron is signing into.
 
 ## never a new file
 
