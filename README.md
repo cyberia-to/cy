@@ -24,7 +24,7 @@ sixteen organs. each has a page in [specs](specs/README.md); [anatomy](specs/ana
 | mind | [[cy/specs/soma\|soma]] · glia · seer · [[cy/specs/soul\|soul]] · [[cy/specs/ward\|ward]] |
 | mouth and messenger | [[cy/specs/com\|com]] · [[cy/specs/voice\|voice]] · [[cy/specs/sense\|sense]] |
 | perception | [[cy/specs/state\|state]] · [[cy/specs/now\|now]] |
-| keeping | [[cy/specs/log\|log]] · [[cy/specs/plan\|plan]] · [[cy/specs/memory\|memory]] · [[cyb/parts/sigma\|sigma]] · [[cy/specs/vault\|vault]] · [[cy/specs/body\|body]] |
+| keeping | [[cy/specs/log\|log]] · [[cy/specs/plan\|plan]] · [[cy/specs/memory\|memory]] · [[cy/specs/sigma\|sigma]] · [[cy/specs/vault\|vault]] · [[cy/specs/body\|body]] |
 
 glia (the model runtime) and seer (the proposer) are their own repositories; the other organs are specified here and grow into crates as their contracts settle.
 
