@@ -58,7 +58,7 @@ a proposal: a ranked or sampled set of candidate cyberlinks $(p, q, \tau, a, v)$
 
 and, per epoch, a report: predicted against realized settlement, structural score against realized $\Delta\lambda_2$, will spent, and whether the neuron's reach is mined out. seer publishes the report as a [[cyberlink]] into the graph it mines.
 
-the neuron decides. seer proposes; the owner signs through [[cyb/parts/ward|ward]] and the vault in cyb, or an agent's own key; tru measures at settlement. the realized value is the training signal for any learned policy.
+the neuron decides. seer proposes; the owner signs through [[cy/specs/ward|ward]] and the vault in cyb, or an agent's own key; tru measures at settlement. the realized value is the training signal for any learned policy.
 
 ## when the loop idles
 
