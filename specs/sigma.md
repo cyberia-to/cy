@@ -3,10 +3,10 @@ title: sigma
 tags: cy, core
 alias: cy sigma
 crystal-type: entity
-crystal-domain: cyb
+crystal-domain: cyber
 ---
 # sigma
 
-not a wallet: the sum of everything the robot holds, and the neurons it commands. balances across tokens and networks on one screen, plus the management of identities — which neuron acts, which sleeps. sigma spends; [[cy/specs/vault|vault]] holds and signs.
+the sum of what the neuron holds, valued in the token of its choice: a registry of tokens with three measurements each — price, balance, supply — one method per measurement, any rule the owner likes. sigma spends; [[cy/specs/vault|vault]] holds and signs.
 
-part of the [[cy/specs/anatomy|anatomy]] (value). live as a world today; the neurons screen is the next growth. the number on the page is last-known; the chain is asked behind it — [[cyb/parts/live]].
+part of the [[cy/specs/anatomy|anatomy]] (keeping). specified in its own repository: [[sigma]] — the contract is [[sigma/specs/sigma|the sum]]. live as a world in [[cyb]] today; the number on the page is last known, the method runs behind it ([[cyb/parts/live|live]]).

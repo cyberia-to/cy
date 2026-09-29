@@ -41,7 +41,7 @@ cy is one organism of sixteen organs. every page in this repository names things
 | **[[cy/specs/log|log]]** | the history of every interaction | live: `~/cyb/graph.log` *is* the log; the world is a rune census + numbers table over the chain |
 | **[[cy/specs/plan|plan]]** | the schedule: standing orders, deferred intents | seed exists (mining standing order); generalizes |
 | **[[cy/specs/memory|memory]]** | the file manager with links: files as a file system, table or tiles; works over a cli as well as a screen | half-live: tap-to-read pages + [[cyb/parts/fs|fs]] become its spec; a projection of the brain in cyb, one key flips brain ⇄ memory |
-| **[[cy/specs/sigma|sigma]]** | not a wallet: the sum of all tokens in possession, and the management of neurons (identities) | live (sigma world); gains the neurons screen; the word *wallet* is banned |
+| **[[cy/specs/sigma|sigma]]** | the sum: a registry of tokens with three measurements each — price, balance, supply — one method per measurement, any rule the owner likes; not a wallet | own repository: [sigma](https://github.com/cyberia-to/sigma); live as a world in cyb |
 | **[[cy/specs/vault|vault]]** | secrets and sleeping neurons: keys, mnemonics, TOTP | live — XChaCha20 under mnemonic + TOTP; sigma spends, vault holds and signs |
 | **[[cy/specs/body|body]]** | the physical body: silicon, sensors, energy, mining — telemetry and resources of the machine the robot lives on | live (default world: telemetry, zheng + seer miners, PUSSY/day) |
 
