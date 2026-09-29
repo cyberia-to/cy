@@ -8,7 +8,7 @@ crystal-domain: cyber
 ---
 # sigma
 
-one thing, done well: the sum of what a [[neuron]] holds, valued in the token of your choice.
+one thing, done well: the sum of what a [[neuron]] holds, measured in [[century index|cx]] by default and in any token you choose.
 
 sigma is a registry of tokens, fungible and not, and three measurements of every token on a neuron: **price**, **balance**, **supply**. each token carries one method per measurement, chosen by the owner. turnover is optional. price may follow any rule the owner likes: a market, an oracle, a formula over the graph, a number typed by hand. from the three measurements sigma derives the whole economy of a neuron and the value of any token in any other.
 

@@ -26,7 +26,7 @@ balance    a method
 supply     a method
 ```
 
-the registry is the owner's, kept in the book of the neuron: adding a token is a cyberlink from the neuron's name to the token's particle under the sigma dialect, and so is changing a method. two neurons may value the same token by different rules and both are right for their own sum.
+the registry is born with one entry, cx, the default measure; every other entry is the owner's, kept in the book of the neuron: adding a token is a cyberlink from the neuron's name to the token's particle under the sigma dialect, and so is changing a method. two neurons may value the same token by different rules and both are right for their own sum.
 
 ## the three measurements
 
@@ -73,7 +73,7 @@ with three measurements every token yields the rest without a fourth method:
 - **capitalisation**: `supply(t) × price(t, in: k)`
 - **the price of a token in any other**: `price(a, in: b) = price(a, in: k) / price(b, in: k)` for any k both are priced in; a token priced only by `hand` prices everything else through that hand
 
-the numeraire is the owner's choice and may be any token in the registry, including one whose price is a formula. the sum in [[cx|cx]] and the sum in a coin of the neuron's own book are the same computation with a different k.
+the numeraire k defaults to **cx**, the [[century index]]: a fixed basket of eight world assets (BTC, ETH, gold, CNY, USD, copper, oil, uranium), measured in itself constant, so a sum in cx keeps its meaning across years and across neurons. cx is a `formula` token in every registry from birth: its price in any leg is the published fix of the basket, its supply is undefined (it is a unit, not a coin), its balance is a holding of the [[cx|cx token]] where one exists. the owner may set any other token as numeraire; the sum in a coin of the neuron's own book is the same computation with a different k.
 
 ## what sigma is not
 
