@@ -54,6 +54,11 @@ pub enum SomaEvent {
     Waking,
     /// The mind is running the question. Sent as generation starts.
     Thinking,
+    /// Prefill is stepping the prompt: `done` of `total` tokens already
+    /// consumed. The first event is `{0, n}`; the last is `{n, n}` when
+    /// decode is about to start. Without this the UI is silent for the
+    /// whole prompt pass, which on a phone is long enough to look dead.
+    Prefill { done: usize, total: usize },
     /// A piece of the answer, as it is being written. Concatenating every
     /// delta gives the raw generation; [`SomaEvent::Answer`] carries the
     /// cleaned-up whole.
@@ -68,6 +73,10 @@ pub enum SomaEvent {
         concepts: Vec<String>,
         tokens: usize,
         tok_per_s: f32,
+        /// Prompt tokens / prefill seconds.
+        tok_in_s: f32,
+        /// Generated tokens / decode seconds.
+        tok_out_s: f32,
     },
     /// The mind failed. The text says how; the mind stays up for the next ask.
     Error(String),
@@ -119,6 +128,13 @@ pub fn chosen_model_file() -> PathBuf {
     PathBuf::from(home).join("cyb").join("model")
 }
 
+/// Who soma is, on every question. The commander is nushell; soma is talk.
+const SOMA_SELF: &str = "You are soma, the local mind of this cyb. \
+The commander on every world is nushell: a typed command runs there \
+(`help`, `ls`, pipes). A question (`? …` or a word the shell does not \
+know) comes to you. You do not execute commands. If a command would \
+help, name it so they can type it.";
+
 /// What the host can tell the mind.
 enum Directive {
     Ask {
@@ -126,6 +142,8 @@ enum Directive {
         /// What the graph already holds on the subject — recalled by the
         /// host, spoken into the prompt here. Empty means answer cold.
         context: Vec<String>,
+        /// Extra standing instructions from the host (command catalog, …).
+        system: String,
     },
     /// Put down the current weights and pick these up on the next question.
     UseModel(PathBuf),
@@ -163,9 +181,21 @@ impl Soma {
     /// difference between chatting *near* a cybergraph and reasoning *over*
     /// one — the mind is told what it already knows.
     pub fn ask_grounded(&self, question: impl Into<String>, context: Vec<String>) {
+        self.ask_on(question, context, String::new());
+    }
+
+    /// Ask with recall and a host-supplied standing note (the shell's
+    /// command names, a body-specific fact). Folded into the system turn.
+    pub fn ask_on(
+        &self,
+        question: impl Into<String>,
+        context: Vec<String>,
+        system: impl Into<String>,
+    ) {
         let _ = self.ask_tx.send(Directive::Ask {
             question: question.into(),
             context,
+            system: system.into(),
         });
     }
 
@@ -183,9 +213,7 @@ impl Soma {
         match self.event_rx.try_recv() {
             Ok(ev) => Some(ev),
             Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => Some(SomaEvent::Error(
-                "soma thread is gone".into(),
-            )),
+            Err(TryRecvError::Disconnected) => Some(SomaEvent::Error("soma thread is gone".into())),
         }
     }
 }
@@ -223,8 +251,12 @@ fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<
     let mut mind: Option<LoadedMind> = None;
 
     while let Ok(directive) = ask_rx.recv() {
-        let (question, context) = match directive {
-            Directive::Ask { question, context } => (question, context),
+        let (question, context, system) = match directive {
+            Directive::Ask {
+                question,
+                context,
+                system,
+            } => (question, context, system),
             Directive::UseModel(path) => {
                 mind = None;
                 cfg.model = path.clone();
@@ -246,20 +278,31 @@ fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<
         let m = mind.as_mut().unwrap();
 
         let _ = event_tx.send(SomaEvent::Thinking);
-        let t0 = std::time::Instant::now();
-        let deltas = event_tx.clone();
-        match think(m, &question, &context, &cfg, move |d| {
-            let _ = deltas.send(SomaEvent::Delta(d));
-        }) {
-            Ok((answer, tokens)) => {
-                let secs = t0.elapsed().as_secs_f32().max(1e-3);
-                let concepts = concepts_of(&question, &answer);
+        let delta_tx = event_tx.clone();
+        let prefill_tx = event_tx.clone();
+        match think(
+            m,
+            &question,
+            &context,
+            &system,
+            &cfg,
+            move |d| {
+                let _ = delta_tx.send(SomaEvent::Delta(d));
+            },
+            move |done, total| {
+                let _ = prefill_tx.send(SomaEvent::Prefill { done, total });
+            },
+        ) {
+            Ok(stats) => {
+                let concepts = concepts_of(&question, &stats.answer);
                 let _ = event_tx.send(SomaEvent::Answer {
                     question,
-                    answer,
+                    answer: stats.answer,
                     concepts,
-                    tokens,
-                    tok_per_s: tokens as f32 / secs,
+                    tokens: stats.gen_tokens,
+                    tok_per_s: stats.tok_out_s,
+                    tok_in_s: stats.tok_in_s,
+                    tok_out_s: stats.tok_out_s,
                 });
             }
             Err(e) => {
@@ -269,16 +312,40 @@ fn mind_loop(mut cfg: SomaConfig, ask_rx: Receiver<Directive>, event_tx: Sender<
     }
 }
 
-fn wake(cfg: &SomaConfig) -> Result<LoadedMind, String> {
-    if !cfg.model.exists() {
-        return Err(format!(
-            "no model at {} — set SOMA_MODEL to a glia .model file",
-            cfg.model.display()
-        ));
+/// Openable and large enough to be a real .model — `exists()` is not
+/// enough: an adb-pushed file on Android FUSE can stat and still refuse
+/// mmap, which is how soma loads weights.
+fn usable_model(path: &std::path::Path) -> bool {
+    std::fs::File::open(path)
+        .and_then(|f| f.metadata())
+        .map(|m| m.len() > 1024 && path.extension().is_some_and(|x| x == "model"))
+        .unwrap_or(false)
+}
+
+fn resolve_model(preferred: &std::path::Path) -> Result<std::path::PathBuf, String> {
+    if usable_model(preferred) {
+        return Ok(preferred.to_path_buf());
     }
-    let lm = run::LoadedModel::load(&cfg.model).map_err(|e| format!("model load: {e}"))?;
-    let tokenizer =
-        run::tokenizer::build_tokenizer(&lm).map_err(|e| format!("tokenizer: {e}"))?;
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
+    let dir = std::path::PathBuf::from(home).join("llm");
+    if let Ok(rd) = std::fs::read_dir(&dir) {
+        let mut models: Vec<std::path::PathBuf> = rd
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .filter(|p| usable_model(p))
+            .collect();
+        models.sort_by_key(|p| p.metadata().map(|m| m.len()).unwrap_or(u64::MAX));
+        if let Some(p) = models.into_iter().next() {
+            return Ok(p);
+        }
+    }
+    Err("no model on this body — open models and fetch qwen3-0.6b, or put a .model in ~/llm".into())
+}
+
+fn wake(cfg: &SomaConfig) -> Result<LoadedMind, String> {
+    let model_path = resolve_model(&cfg.model)?;
+    let lm = run::LoadedModel::load(&model_path).map_err(|e| format!("model load: {e}"))?;
+    let tokenizer = run::tokenizer::build_tokenizer(&lm).map_err(|e| format!("tokenizer: {e}"))?;
     let mut model = run::arch::decoder::LlamaModel::from_loaded(&lm)
         .map_err(|e| format!("model build: {e}"))?;
 
@@ -323,49 +390,74 @@ fn wake(cfg: &SomaConfig) -> Result<LoadedMind, String> {
     log::info!("soma: backend {:?}", backend.kind());
 
     log::info!("soma: awake — {}", cfg.model.display());
-    Ok(LoadedMind { model, tokenizer, backend })
+    Ok(LoadedMind {
+        model,
+        tokenizer,
+        backend,
+    })
+}
+
+struct ThinkStats {
+    answer: String,
+    gen_tokens: usize,
+    tok_in_s: f32,
+    tok_out_s: f32,
 }
 
 fn think(
     m: &mut LoadedMind,
     question: &str,
     context: &[String],
+    system: &str,
     cfg: &SomaConfig,
     on_delta: impl FnMut(String),
-) -> Result<(String, usize), String> {
-    // Recall becomes a system message: the graph speaks first, then the
-    // question. Framed as the mind's own memory — because it is; every line
-    // of it was linked by this cyb's owner or said by this mind before.
+    on_prefill: impl FnMut(usize, usize),
+) -> Result<ThinkStats, String> {
     let mut messages: Vec<ChatMessage> = Vec::new();
+    let mut self_msg = SOMA_SELF.to_string();
+    if !system.is_empty() {
+        self_msg.push('\n');
+        self_msg.push_str(system);
+    }
     if !context.is_empty() {
-        let mut memory = String::from(
-            "You are soma, the local mind of a cyb. Your cybergraph already \
-             holds the following, from earlier exchanges. Build on it; do not \
-             contradict it without saying why.\n",
+        self_msg.push_str(
+            "\nYour cybergraph already holds the following, from earlier \
+             exchanges. Build on it; do not contradict it without saying why.",
         );
         for c in context {
-            memory.push_str("\n- ");
-            memory.push_str(c);
+            self_msg.push_str("\n- ");
+            self_msg.push_str(c);
         }
-        messages.push(ChatMessage {
-            role: "system".into(),
-            content: memory,
-        });
     }
+    messages.push(ChatMessage {
+        role: "system".into(),
+        content: self_msg,
+    });
     messages.push(ChatMessage {
         role: "user".into(),
         content: question.into(),
     });
 
-    generate_messages(m, &messages, cfg, on_delta,
-        std::time::Instant::now() + std::time::Duration::from_secs(120), 8192)
+    generate_messages(
+        m,
+        &messages,
+        cfg,
+        on_delta,
+        on_prefill,
+        std::time::Instant::now() + std::time::Duration::from_secs(180),
+        8192,
+    )
 }
 
 fn generate_messages(
-    m: &mut LoadedMind, messages: &[ChatMessage], cfg: &SomaConfig,
-    mut on_delta: impl FnMut(String), deadline: std::time::Instant,
+    m: &mut LoadedMind,
+    messages: &[ChatMessage],
+    cfg: &SomaConfig,
+    mut on_delta: impl FnMut(String),
+    mut on_prefill: impl FnMut(usize, usize),
+    deadline: std::time::Instant,
     max_prompt_tokens: usize,
-) -> Result<(String, usize), String> {
+) -> Result<ThinkStats, String> {
     // The model's own chat template, then an empty think block appended. The
     // qwen3 family spends its whole token budget deliberating inside
     // <think> unless the block is already there and closed — this is the
@@ -374,7 +466,11 @@ fn generate_messages(
     prompt.push_str("<think>\n\n</think>\n\n");
 
     let sample = SampleConfig {
-        method: if cfg.temperature > 0.0 { SampleKind::TopP } else { SampleKind::Greedy },
+        method: if cfg.temperature > 0.0 {
+            SampleKind::TopP
+        } else {
+            SampleKind::Greedy
+        },
         temperature: cfg.temperature,
         top_p: 0.95,
         top_k: 40,
@@ -388,33 +484,57 @@ fn generate_messages(
     // at a time tears UTF-8 apart exactly where it matters (any text that is
     // not English).
     m.model.reset();
+    let t_prefill = std::time::Instant::now();
     let mut ids = m.tokenizer.encode(&prompt);
     if let Some(bos) = m.tokenizer.bos_token_id {
         if ids.first() != Some(&bos) {
             ids.insert(0, bos);
         }
     }
-    if ids.len() > max_prompt_tokens { return Err("model prompt token limit".into()); }
+    if ids.len() > max_prompt_tokens {
+        return Err("model prompt token limit".into());
+    }
+    let prompt_n = ids.len();
+    on_prefill(0, prompt_n);
     let mut logits: Vec<f32> = Vec::new();
-    for &t in &ids {
-        if std::time::Instant::now() >= deadline { return Err("model prefill deadline".into()); }
+    let mut last_report = t_prefill;
+    for (i, &t) in ids.iter().enumerate() {
+        if std::time::Instant::now() >= deadline {
+            return Err("model prefill deadline".into());
+        }
         logits = m
             .model
             .step(t, m.backend.as_ref())
             .map_err(|e| format!("prefill: {e}"))?;
+        let stepped = i + 1;
+        let now = std::time::Instant::now();
+        if stepped == prompt_n
+            || stepped % 4 == 0
+            || now.duration_since(last_report).as_millis() >= 200
+        {
+            on_prefill(stepped, prompt_n);
+            last_report = now;
+        }
     }
 
+    let prefill_s = t_prefill.elapsed().as_secs_f32().max(1e-3);
+    let prompt_tokens = prompt_n;
+    let t_decode = std::time::Instant::now();
     let mut generated: Vec<u32> = Vec::new();
     let mut sent = String::new();
     for _ in 0..cfg.max_tokens {
-        if std::time::Instant::now() >= deadline { return Err("model decode deadline".into()); }
+        if std::time::Instant::now() >= deadline {
+            return Err("model decode deadline".into());
+        }
         let next = run::generate::sample(&logits, sample);
         if m.tokenizer.is_eos(next) {
             break;
         }
         generated.push(next);
         let full = m.tokenizer.decode(&generated, false);
-        if full.len() > soma_agent::MAX_TEXT { return Err("model text result limit".into()); }
+        if full.len() > soma_agent::MAX_TEXT {
+            return Err("model text result limit".into());
+        }
         if full.len() > sent.len() && full.is_char_boundary(sent.len()) {
             let delta = full[sent.len()..].to_string();
             let _ = on_delta(delta);
@@ -427,7 +547,14 @@ fn generate_messages(
     }
 
     let raw = m.tokenizer.decode(&generated, false);
-    Ok((tidy(&raw), generated.len()))
+    let decode_s = t_decode.elapsed().as_secs_f32().max(1e-3);
+    let gen = generated.len();
+    Ok(ThinkStats {
+        answer: tidy(&raw),
+        gen_tokens: gen,
+        tok_in_s: prompt_tokens as f32 / prefill_s,
+        tok_out_s: gen as f32 / decode_s,
+    })
 }
 
 /// The recurring content words of an exchange, most frequent first — the
@@ -442,18 +569,96 @@ fn generate_messages(
 pub fn concepts_of(question: &str, answer: &str) -> Vec<String> {
     const STOP: &[&str] = &[
         // en
-        "this", "that", "with", "from", "have", "what", "which", "your",
-        "will", "would", "could", "should", "about", "there", "their",
-        "them", "then", "than", "these", "those", "some", "such", "also",
-        "into", "over", "more", "most", "other", "when", "where", "here",
-        "does", "very", "just", "like", "used", "using", "each", "between",
-        "because", "while", "been", "being", "only", "must", "many", "much",
-        "they", "were", "your", "yours", "ours", "it's", "don't", "can't",
+        "this",
+        "that",
+        "with",
+        "from",
+        "have",
+        "what",
+        "which",
+        "your",
+        "will",
+        "would",
+        "could",
+        "should",
+        "about",
+        "there",
+        "their",
+        "them",
+        "then",
+        "than",
+        "these",
+        "those",
+        "some",
+        "such",
+        "also",
+        "into",
+        "over",
+        "more",
+        "most",
+        "other",
+        "when",
+        "where",
+        "here",
+        "does",
+        "very",
+        "just",
+        "like",
+        "used",
+        "using",
+        "each",
+        "between",
+        "because",
+        "while",
+        "been",
+        "being",
+        "only",
+        "must",
+        "many",
+        "much",
+        "they",
+        "were",
+        "your",
+        "yours",
+        "ours",
+        "it's",
+        "don't",
+        "can't",
         // ru
-        "этот", "это", "эта", "как", "что", "или", "для", "если", "чтобы",
-        "который", "которая", "может", "быть", "есть", "она", "оно", "они",
-        "его", "её", "их", "нас", "вас", "при", "под", "над", "все", "всё",
-        "так", "тоже", "также", "когда", "где", "почему", "потому",
+        "этот",
+        "это",
+        "эта",
+        "как",
+        "что",
+        "или",
+        "для",
+        "если",
+        "чтобы",
+        "который",
+        "которая",
+        "может",
+        "быть",
+        "есть",
+        "она",
+        "оно",
+        "они",
+        "его",
+        "её",
+        "их",
+        "нас",
+        "вас",
+        "при",
+        "под",
+        "над",
+        "все",
+        "всё",
+        "так",
+        "тоже",
+        "также",
+        "когда",
+        "где",
+        "почему",
+        "потому",
     ];
 
     let mut counts: Vec<(String, usize)> = Vec::new();
@@ -482,9 +687,13 @@ fn tidy(raw: &str) -> String {
     if let Some(open) = s.find("<think>") {
         if let Some(close) = s.find("</think>") {
             if close > open {
-                return format!("{}{}", &s[..open], s[close + "</think>".len()..].trim_start())
-                    .trim()
-                    .to_string();
+                return format!(
+                    "{}{}",
+                    &s[..open],
+                    s[close + "</think>".len()..].trim_start()
+                )
+                .trim()
+                .to_string();
             }
         }
         // An unclosed think block means the budget ran out mid-thought;
@@ -515,8 +724,14 @@ mod tests {
 
     #[test]
     fn concepts_are_deterministic_and_ranked() {
-        let a = concepts_of("what is a cybergraph?", "a cybergraph links particles; particles form the cybergraph");
-        let b = concepts_of("what is a cybergraph?", "a cybergraph links particles; particles form the cybergraph");
+        let a = concepts_of(
+            "what is a cybergraph?",
+            "a cybergraph links particles; particles form the cybergraph",
+        );
+        let b = concepts_of(
+            "what is a cybergraph?",
+            "a cybergraph links particles; particles form the cybergraph",
+        );
         assert_eq!(a, b);
         assert_eq!(a[0], "cybergraph", "most frequent word ranks first: {a:?}");
         assert!(a.contains(&"particles".to_string()));
@@ -545,11 +760,18 @@ mod tests {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(180);
         let mut changed_to: Option<PathBuf> = None;
         loop {
-            assert!(std::time::Instant::now() < deadline, "no answer in three minutes");
+            assert!(
+                std::time::Instant::now() < deadline,
+                "no answer in three minutes"
+            );
             match soma.poll() {
                 Some(SomaEvent::ModelChanged(p)) => changed_to = Some(p),
                 Some(SomaEvent::Answer { answer, .. }) => {
-                    assert_eq!(changed_to.as_ref(), Some(&second), "answered before acknowledging the switch");
+                    assert_eq!(
+                        changed_to.as_ref(),
+                        Some(&second),
+                        "answered before acknowledging the switch"
+                    );
                     assert!(!answer.trim().is_empty());
                     break;
                 }
@@ -583,7 +805,10 @@ mod tests {
         );
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
         loop {
-            assert!(std::time::Instant::now() < deadline, "no answer in two minutes");
+            assert!(
+                std::time::Instant::now() < deadline,
+                "no answer in two minutes"
+            );
             match soma.poll() {
                 Some(SomaEvent::Answer { answer, .. }) => {
                     assert!(
@@ -627,6 +852,7 @@ mod tests {
             match soma.poll() {
                 Some(SomaEvent::Waking) => saw_waking = true,
                 Some(SomaEvent::Thinking) => {}
+                Some(SomaEvent::Prefill { .. }) => {}
                 Some(SomaEvent::Delta(d)) => deltas.push_str(&d),
                 Some(SomaEvent::ModelChanged(_)) => {}
                 Some(SomaEvent::Answer { answer, tokens, .. }) => {

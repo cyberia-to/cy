@@ -1,11 +1,11 @@
 //! Bounded, correlated provider handoff from the neuron worker boundary.
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use soma_agent::{AdapterOutcome, Decision, Id, MAX_TEXT, Model, ModelProvider, Output, Request};
+use soma_agent::{AdapterOutcome, Decision, Id, Model, ModelProvider, Output, Request, MAX_TEXT};
 use std::{
     io::Read,
     path::Path,
-    sync::mpsc::{Receiver, SyncSender, TryRecvError, TrySendError, sync_channel},
+    sync::mpsc::{sync_channel, Receiver, SyncSender, TryRecvError, TrySendError},
     time::{Duration, Instant},
 };
 pub const PROVIDER: &str = "glia/local-sha256/1";
@@ -318,18 +318,20 @@ fn infer(
     }
     let mind = &mut loaded.as_mut().ok_or("model unavailable")?.2;
     let started = Instant::now();
-    let (answer, tokens) = super::generate_messages(
+    let stats = super::generate_messages(
         mind,
         &messages,
         &cfg,
         &mut delta,
+        |_, _| {},
         deadline,
         parameters.max_prompt_tokens as usize,
     )?;
+    let _ = started;
     Ok((
-        parse_decision(&answer)?,
-        tokens,
-        tokens as f32 / started.elapsed().as_secs_f32().max(0.001),
+        parse_decision(&stats.answer)?,
+        stats.gen_tokens,
+        stats.tok_out_s,
     ))
 }
 fn parse_decision(answer: &str) -> Result<Decision, String> {
@@ -364,22 +366,18 @@ mod tests {
                 answer: "ready".into()
             }
         );
-        assert!(
-            Parameters {
-                temperature: f32::NAN,
-                ..Default::default()
-            }
-            .validate()
-            .is_err()
-        );
-        assert!(
-            Parameters {
-                wall_seconds: 0,
-                ..Default::default()
-            }
-            .validate()
-            .is_err()
-        );
+        assert!(Parameters {
+            temperature: f32::NAN,
+            ..Default::default()
+        }
+        .validate()
+        .is_err());
+        assert!(Parameters {
+            wall_seconds: 0,
+            ..Default::default()
+        }
+        .validate()
+        .is_err());
     }
 }
 
