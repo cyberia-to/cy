@@ -24,9 +24,9 @@ sha1 = "0.10"
 sha2 = "0.10"
 zeroize = { version = "1", features = ["derive"] }
 subtle = "2"
-mudra = { package = "cyber-mudra", path = "../mudra" }
-hemera = { package = "cyber-hemera", path = "../hemera/rs" }
-cybergraph = { path = "../cybergraph", features = ["local-storage"], optional = true }
+mudra = { package = "cyber-mudra", path = "../../mudra" }
+hemera = { package = "cyber-hemera", path = "../../hemera/rs" }
+cybergraph = { path = "../../cybergraph", features = ["local-storage"], optional = true }
 clap = { version = "4", features = ["derive"], optional = true }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }

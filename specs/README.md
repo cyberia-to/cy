@@ -17,6 +17,6 @@ one page per organ, named by the anatomy:
 
 [[cy/specs/now|now]] · [[cy/specs/voice|voice]] · [[cy/specs/name|name]] · [[cy/specs/sense|sense]] · [[cy/specs/sigma|sigma]] · [[cy/specs/memory|memory]] · [[cy/specs/com|com]] · [[cy/specs/time|time]] (with [[cy/specs/log|log]] and [[cy/specs/plan|plan]]) — the chroma; [[cy/specs/soma|soma]] · [[cy/specs/soul|soul]] · [[cy/specs/ward|ward]] · [[cy/specs/vault|vault]] · [[cy/specs/state|state]] · [[cy/specs/body|body]] — unseen (glia and seer are their own repositories)
 
-glia, seer and sigma are specified in their own repositories; the sigma page here is the organ's row, the contract is [[sigma/specs/sigma|the sum]].
+glia, seer, sigma, soma and vault live in this repository as directories (`glia/`, `seer/`, `sigma/`, `soma/`, `vault/`, since 2026-10-07); the organ pages here are the rows of the anatomy, the contracts sit inside each directory.
 
 this repository holds contracts. audits, benchmarks and release receipts go to `audit/` at the root, per the shared rule in `soft3/specs/README.md`. the ladder, the parts registry and the vocabulary live in [soft3](https://github.com/cyberia-to/soft3) and are not restated here.
