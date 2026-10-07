@@ -43,6 +43,6 @@ one test: cy works over ssh with no display. an organ that needs a camera, a spe
 
 ## where cy sits
 
-rung 6 of the ten-product ladder of [soft3](https://soft3.org/layers), between the language (neural) and the network (soft3): one chip for the chroma, one per unseen organ. the vocabulary is `soft3/specs/terms.md`; this repository does not restate it.
+rung 6 of the ten-product ladder on the front page of [soft3](https://soft3.org), between the language (neural) and the network (soft3): one chip for the chroma, one per unseen organ. the vocabulary is `soft3/specs/terms.md`; this repository does not restate it.
 
 [[cyb]] · [[cybergraph]] · [[neural]] · [[soft3]] · [[cyber]]
