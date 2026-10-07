@@ -28,11 +28,11 @@ the smallest cy that is an agent and not a wallet or a database, in the order it
 
 1. a key and a name: a [[neuron]] with its [[cy/specs/vault|vault]] sealed under a secret.
 2. a declaration: a [[cy/specs/soul|soul]] naming a model, the dialects it may speak and what it may do unasked; [[cy/specs/ward|ward]] enforces it.
-3. an input: [[cy/specs/com|com]], one line with completion.
+3. an input: [[cy/chroma/com|com]], one line with completion.
 4. a mind: [[cy/specs/soma|soma]] answers a question over the book, calling a model through glia, and links the answer back.
-5. a signal out: [[cy/specs/voice|voice]] forms it, [[cy/specs/sense|sense]] sends it.
-6. a balance and a history: sigma shows what the agent holds, [[cy/specs/log|log]] records what it did.
-7. a next move: seer proposes the cyberlink worth making; [[cy/specs/plan|plan]] holds the standing orders.
+5. a signal out: [[cy/chroma/voice|voice]] forms it, [[cy/chroma/sense|sense]] sends it.
+6. a balance and a history: sigma shows what the agent holds, [[cy/chroma/log|log]] records what it did.
+7. a next move: seer proposes the cyberlink worth making; [[cy/chroma/plan|plan]] holds the standing orders.
 
 where each stands today is in [anatomy](anatomy.md). the inference path (steps 3 to 4) and the vault, log and body are live; the soul as a file, sense as a full inbox and voice as a signal former are to build.
 

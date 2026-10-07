@@ -7,18 +7,18 @@ crystal-domain: cyber
 ---
 # anatomy — the organs of the agent
 
-cy is one organism of sixteen organs in two kinds: **eight that show** — the slots of the [[cy/specs/chroma|chroma]], the agent's 3×3 surface — and **eight that work unseen** behind them. every page in this repository names things by this table; a page that cannot be traced to an organ is legacy or belongs to [[cyb]], where the body's own organs remain (avatar, brain, vision and the painting doctrine).
+cy is one organism of sixteen organs in two kinds: **eight that show** — the slots of the [[cy/chroma/README|chroma]], the agent's 3×3 surface — and **eight that work unseen** behind them. every page in this repository names things by this table; a page that cannot be traced to an organ is legacy or belongs to [[cyb]], where the body's own organs remain (avatar, brain, vision and the painting doctrine).
 
 ## the chroma — what shows
 
 | part | slot | is | today |
 |---|---|---|---|
-| **[[cy/specs/now|now]]** | top-left · where | the context — the file the agent stands on, and the hinge of everything: what [[cy/specs/com|com]] acts on by default, what [[cy/specs/soma|soma]] packs into the model's window, where casts attach, where [[cy/specs/memory|memory]] stands, the centre [[cy/specs/time|time]] pivots on | partial — the app tracks a current particle; the organ with its many functions is to build |
-| **[[cy/specs/voice|voice]]** | top-centre · says | what the agent answers: forms a signal and hands it to [[cy/specs/sense|sense]] to send; not sound | to grow |
-| **[[cy/specs/name|name]]** | top-right · who | the resolver — the agent's name resolves through the graph, owned like a token, not set in a config | ports with the soft3 genesis |
-| **[[cy/specs/sense|sense]]** | mid-left · messages | the messenger — interaction with other neurons, files, robots | seed exists (`money_to_sense`, notices); grows into the inbox/outbox |
-| **[[cy/specs/com|com]]** | bottom-centre · command | the commander — the one input of the agent: a line with completion, on a cli or under a screen; reads [[cy/specs/soul|soul]] on every ask | live (com world in cyb); the prompt of the cy cli |
-| **[[cy/specs/time|time]]** | bottom-right · when | one screen: [[cy/specs/log|log]] ← now → [[cy/specs/plan|plan]] — the history of every interaction and the schedule of standing orders, the present in the middle | log live (`~/cyb/graph.log` *is* the log); plan seeded (mining standing order); the view to build |
+| **[[cy/chroma/now|now]]** | top-left · where | the context — the file the agent stands on, and the hinge of everything: what [[cy/chroma/com|com]] acts on by default, what [[cy/specs/soma|soma]] packs into the model's window, where casts attach, where [[cy/chroma/memory|memory]] stands, the centre [[cy/chroma/time|time]] pivots on | partial — the app tracks a current particle; the organ with its many functions is to build |
+| **[[cy/chroma/voice|voice]]** | top-centre · says | what the agent answers: forms a signal and hands it to [[cy/chroma/sense|sense]] to send; not sound | to grow |
+| **[[cy/chroma/name|name]]** | top-right · who | the resolver — the agent's name resolves through the graph, owned like a token, not set in a config | ports with the soft3 genesis |
+| **[[cy/chroma/sense|sense]]** | mid-left · messages | the messenger — interaction with other neurons, files, robots | seed exists (`money_to_sense`, notices); grows into the inbox/outbox |
+| **[[cy/chroma/com|com]]** | bottom-centre · command | the commander — the one input of the agent: a line with completion, on a cli or under a screen; reads [[cy/specs/soul|soul]] on every ask | live (com world in cyb); the prompt of the cy cli |
+| **[[cy/chroma/time|time]]** | bottom-right · when | one screen: [[cy/chroma/log|log]] ← now → [[cy/chroma/plan|plan]] — the history of every interaction and the schedule of standing orders, the present in the middle | log live (`~/cyb/graph.log` *is* the log); plan seeded (mining standing order); the view to build |
 
 the centre, **spacetime**, is a slot and not an organ: it hosts whatever renders — the transcript in a terminal, a world in cyb.
 
