@@ -79,6 +79,6 @@ each slot has a particle identity. intents are particles too — adding an inten
 
 ## where the painting lives
 
-the renderer mapping — pixels, cameras, overlay order, the per-slot visual contracts — is [[prysm]]'s: `prysm/chroma/specs/`. the slot ids in code (`cyb/crates/cyb/src/chroma.rs`) still carry the painter's old names (space, ad, ava, brain); they adopt the organ names in the anatomy's code phase.
+the renderer mapping — pixels, cameras, overlay order, the per-slot visual contracts — is [[prysm]]'s: `prysm/chroma/specs/`. in code the slots are `cyb_core::ChromaId` (`cyb/core/src/chroma.rs`), named by these organs since 2026-10-07, with `from_painter_name` reading the old names (space, ad, ava, brain) off old particles; `WorldState::slot()` in the shell is the worlds-as-slots table the overlay drives. the overlay itself — nine slots on one screen, in cells for cy and in pixels for cyb — is the open piece: today the shell switches whole worlds and the cy cli is a flat command list.
 
 [[cy]] · [[cy/specs/anatomy|anatomy]] · [[cyb]] · [[prysm]]
