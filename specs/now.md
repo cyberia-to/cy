@@ -19,7 +19,7 @@ its functions, and this list will only grow:
 - **the model's window** — when [[cy/specs/soma|soma]] is asked, the context packed into the model is the neighborhood of now
 - **the anchor of casts** — new links attach from now unless said otherwise; move, and your next thought lands elsewhere
 - **the cursor of navigation** — where [[cyb/parts/brain|brain]] flies and [[cy/specs/memory|memory]] scrolls, now is the position
-- **the center of [[cyb/parts/time|time]]** — the screen pivots on the present: [[cy/specs/log|log]] behind it, [[cy/specs/plan|plan]] ahead
+- **the center of [[cy/specs/time|time]]** — the screen pivots on the present: [[cy/specs/log|log]] behind it, [[cy/specs/plan|plan]] ahead
 - **the address of attention** — what the robot reports as its focus; two robots on one particle are *in the same place*, which is what presence means in a graph
 - **the seed of [[cy/specs/sense|sense]]** — messages attach to the particle they were spoken on
 

@@ -1,0 +1,54 @@
+[package]
+name = "cyber-vault"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Typed secret custody and durable encrypted records for soft3"
+repository = "https://github.com/cyberia-to/vault"
+
+[lib]
+name = "vault"
+
+[features]
+default = ["graph-store", "cli"]
+graph-store = ["dep:cybergraph"]
+local-host = ["graph-store", "dep:serde", "dep:serde_json", "dep:rpassword", "dep:tempfile", "dep:rustix", "dep:hex"]
+cli = ["local-host", "dep:clap", "dep:data-encoding"]
+
+[dependencies]
+argon2 = { version = "0.5.3", features = ["zeroize"] }
+chacha20poly1305 = "0.10.1"
+getrandom = "0.2"
+hmac = "0.12"
+sha1 = "0.10"
+sha2 = "0.10"
+zeroize = { version = "1", features = ["derive"] }
+subtle = "2"
+mudra = { package = "cyber-mudra", path = "../../mudra" }
+hemera = { package = "cyber-hemera", path = "../../hemera/rs" }
+cybergraph = { path = "../../cybergraph", features = ["local-storage"], optional = true }
+clap = { version = "4", features = ["derive"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+rpassword = { version = "7", optional = true }
+tempfile = { version = "3", optional = true }
+rustix = { version = "1", features = ["process"], optional = true }
+hex = { version = "0.4", optional = true }
+data-encoding = { version = "2", optional = true }
+
+[dev-dependencies]
+tempfile = "3"
+
+[[example]]
+name = "recovery"
+required-features = ["graph-store"]
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[[bin]]
+name = "vault"
+path = "src/bin/vault.rs"
+required-features = ["cli"]
+
+[workspace]
