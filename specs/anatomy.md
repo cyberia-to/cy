@@ -23,7 +23,7 @@ cy is one organism of sixteen organs. every page in this repository names things
 
 | part | is | today |
 |---|---|---|
-| **[[cy/specs/com|com]]** | the commander — the one input of the agent: a line with completion, on a cli or under a screen; reads [[cy/specs/soul|soul]] on every ask | live (com world in cyb); the prompt of the cy cli; becomes omnipresent chrome in cyb |
+| **[[cy/specs/com|com]]** | the commander — the one input of the agent: a line with completion, on a cli or under a screen; reads [[cy/specs/soul|soul]] on every ask | live (com world in cyb); the prompt of the cy cli; becomes omnipresent chroma in cyb |
 | **[[cy/specs/voice|voice]]** | the ability to form a signal and hand it to [[cy/specs/sense|sense]] to send; not sound | to grow |
 | **[[cy/specs/sense|sense]]** | the messenger — interaction with other neurons, files, robots | seed exists (`money_to_sense`, notices); grows into the robot's inbox/outbox |
 
